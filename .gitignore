@@ -30,3 +30,7 @@ ENV/
 
 # Documentation build
 docs/_build/
+
+# Security artifacts
+/sbom.json
+\.hypothesis/
