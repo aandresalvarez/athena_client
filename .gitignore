@@ -34,3 +34,6 @@ docs/_build/
 # Security artifacts
 /sbom.json
 \.hypothesis/
+
+extract.py
+output/
