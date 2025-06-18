@@ -15,7 +15,8 @@ authors = [
 
 dependencies = [
     "orjson>=3.9.0",
-    "pydantic>=2.0.0"
+    "pydantic>=2.0.0",
+    "pydantic-settings"
 ]
 
 [tool.setuptools]
