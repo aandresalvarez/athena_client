@@ -33,6 +33,8 @@ jobs:
         run: pip install hatch
       - name: Install dev deps
         run: hatch env create
+      - name: List installed packages
+        run: hatch run pip list
       - name: Test suite
         run: hatch run cov
       - name: Generate SBOM
