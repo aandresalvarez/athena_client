@@ -1,4 +1,5 @@
 # athena-client
+[![SBOM](https://img.shields.io/badge/SBOM-available-blue)](sbom.json)
 
 A production-ready Python SDK for the OHDSI Athena Concepts API.
 
@@ -104,6 +105,10 @@ q = (Q.term("diabetes") & Q.term("type 2")) | Q.exact('"diabetic nephropathy"')
 # Use with search
 results = athena.search(q)
 ```
+
+### Property-Based Tests
+
+We use **Hypothesis** for edge-case discovery. New core utilities or parsers **must** include at least one Hypothesis scenario.
 
 ## Modern Installation & Packaging
 

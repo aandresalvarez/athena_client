@@ -97,6 +97,8 @@ class Q:
         Returns:
             Query object
         """
+        if not value.endswith("*"):
+            value = f"{value}*"
         return cls("wildcard", value)
     
     def fuzzy(self, ratio: float = 0.7) -> "Q":

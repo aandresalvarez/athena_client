@@ -97,7 +97,8 @@ def test_search_result_to_df(mock_search_response):
     
     with patch.dict("sys.modules", {"pandas": mock_pandas}):
         with patch("athena_client.search_result.pd", mock_pandas):
-            SearchResult(mock_search_response)
+            result = SearchResult(mock_search_response)
+            result.to_df()
             mock_pandas.DataFrame.assert_called_once()
 
 
