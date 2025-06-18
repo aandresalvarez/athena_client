@@ -13,6 +13,8 @@ jobs:
           python-version: '3.11'
       - name: Install Hatch
         run: pip install hatch
+      - name: Install Bandit
+        run: pip install bandit
       - name: Install dev deps
         run: hatch env create
       - name: Bandit
