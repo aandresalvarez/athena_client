@@ -13,6 +13,10 @@ authors = [
     {name = "Athena-Client Core Engineering Team"}
 ]
 
+dependencies = [
+    "orjson>=3.9.0"
+]
+
 [tool.setuptools]
 packages = { find = { include = ["athena_client*"], exclude = ["output*"] } }
 
