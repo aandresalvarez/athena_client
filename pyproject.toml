@@ -62,8 +62,14 @@ dev = [
   "twine>=5.1",
   "pytest-benchmark>=4.0",
   "bandit>=1.7.5",
-  "cyclonedx-python-lib>=5.2.0"
+  "cyclonedx-python-lib>=5.2.0",
+  "types-requests",
+  "types-PyYAML",
+  "pandas-stubs"
 ]
+
+[tool.hatch.envs.default]
+features = ["dev"]
 
 [project.scripts]
 athena = "athena_client.cli:main"
