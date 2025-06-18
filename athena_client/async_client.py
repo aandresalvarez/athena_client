@@ -6,17 +6,17 @@ This module provides an asynchronous client for the Athena API using httpx.
 import json
 import logging
 from typing import Any, Dict, Optional, Union, cast
+from urllib.parse import urljoin
 
 import backoff
-from urllib.parse import urljoin
 
 try:
     import httpx
-except ImportError:
+except ImportError as err:
     raise ImportError(
         "httpx is required for the async client. "
         "Install with 'pip install \"athena-client[async]\"'"
-    )
+    ) from err
 
 from .auth import build_headers
 from .exceptions import AthenaError, ClientError, NetworkError, ServerError
@@ -197,7 +197,10 @@ class AsyncHttpClient:
             raise NetworkError(f"Network error: {e}") from e
         
     async def get(
-        self, path: str, params: Optional[Dict[str, Any]] = None, raw_response: bool = False
+        self,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        raw_response: bool = False,
     ) -> Union[Dict[str, Any], httpx.Response]:
         """
         Make a GET request to the Athena API.
@@ -213,8 +216,11 @@ class AsyncHttpClient:
         return await self.request("GET", path, params=params, raw_response=raw_response)
     
     async def post(
-        self, path: str, data: Dict[str, Any], params: Optional[Dict[str, Any]] = None,
-        raw_response: bool = False
+        self,
+        path: str,
+        data: Any = None,
+        params: Optional[Dict[str, Any]] = None,
+        raw_response: bool = False,
     ) -> Union[Dict[str, Any], httpx.Response]:
         """
         Make a POST request to the Athena API.
@@ -228,7 +234,9 @@ class AsyncHttpClient:
         Returns:
             Parsed JSON response or raw Response object
         """
-        return await self.request("POST", path, data=data, params=params, raw_response=raw_response)
+        return await self.request(
+            "POST", path, data=data, params=params, raw_response=raw_response
+        )
 
 
 class AthenaAsyncClient:
@@ -326,7 +334,11 @@ class AthenaAsyncClient:
             
         # If boosts provided, use debug endpoint and include boosts in request
         if boosts or debug:
-            response = await self.http.post("/concepts", data={"boosts": boosts} if boosts else {}, params=params)
+            response = await self.http.post(
+                "/concepts",
+                data={"boosts": boosts} if boosts else {},
+                params=params,
+            )
             return cast(Dict[str, Any], response)
         
         # Otherwise use standard GET endpoint
@@ -371,7 +383,9 @@ class AthenaAsyncClient:
         if only_standard:
             params["standardConcepts"] = "true"
             
-        response = await self.http.get(f"/concepts/{concept_id}/relationships", params=params)
+        response = await self.http.get(
+            f"/concepts/{concept_id}/relationships", params=params
+        )
         data = cast(Dict[str, Any], response)
         return ConceptRelationship.model_validate(data)
     
@@ -393,6 +407,8 @@ class AthenaAsyncClient:
             ConceptRelationsGraph object
         """
         params = {"depth": depth, "zoomLevel": zoom_level}
-        response = await self.http.get(f"/concepts/{concept_id}/relations", params=params)
+        response = await self.http.get(
+            f"/concepts/{concept_id}/relations", params=params
+        )
         data = cast(Dict[str, Any], response)
         return ConceptRelationsGraph.model_validate(data)

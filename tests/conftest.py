@@ -7,8 +7,6 @@ import pytest
 
 from athena_client import Athena
 from athena_client.client import AthenaClient
-from athena_client.http import HttpClient
-from athena_client.query import Q
 
 
 @pytest.fixture

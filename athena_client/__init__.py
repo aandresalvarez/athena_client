@@ -1,9 +1,8 @@
 """
 athena-client: Production-ready Python SDK for the OHDSI Athena Concepts API
 """
-from typing import Dict, List, Optional, Union, Any
+from typing import Any, Dict, Optional
 
-from .client import AthenaClient
 from .models import ConceptDetails, ConceptRelationsGraph, ConceptRelationship
 
 
@@ -40,7 +39,8 @@ class Athena:
             max_retries: Maximum number of retry attempts.
             backoff_factor: Exponential backoff factor for retries.
         """
-        from .client import AthenaClient
+        # Import here to avoid circular imports
+        from .client import AthenaClient  # pylint: disable=import-outside-toplevel
         
         self._client = AthenaClient(
             base_url=base_url,
@@ -54,7 +54,7 @@ class Athena:
     
     def search(
         self,
-        query: str,
+        query: Any,  # Can be str or Q object
         *,
         exact: Optional[str] = None,
         fuzzy: bool = False,
@@ -87,15 +87,15 @@ class Athena:
             SearchResult object containing the search results
         """
         from .search_result import SearchResult
-        from .query import Q
         
-        # If query is a Q object, extract boosts
-        if hasattr(query, "to_boosts"):
-            boosts = query.to_boosts()
-            query = ""
+        # Handle Q object if provided
+        query_str = query
+        if hasattr(query, "to_boosts") and callable(query.to_boosts):
+            boosts = query.to_boosts()  # type: ignore
+            query_str = ""
             
         data = self._client.search_concepts(
-            query=query,
+            query=query_str,
             exact=exact,
             fuzzy=fuzzy,
             wildcard=wildcard,
@@ -227,5 +227,6 @@ class Athena:
             }
         }
 
-# Type hints for return annotations
-from .search_result import SearchResult
+# Type hint for return annotation - needed at the end to avoid circular imports
+# This import is used for type hints only, which is why it's placed at the bottom
+from .search_result import SearchResult  # noqa: E402

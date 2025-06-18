@@ -5,7 +5,6 @@ This module provides a CLI for interacting with the Athena API.
 """
 import json
 import sys
-from pathlib import Path
 from typing import Optional
 
 try:
@@ -58,7 +57,11 @@ def _create_client(
     )
 
 
-def _format_output(data: object, output: str, console: Optional[Console] = None) -> None:
+def _format_output(
+    data: object,
+    output: str,
+    console: Optional[Console] = None
+) -> None:
     """
     Format and print data based on the requested output format.
     
@@ -254,10 +257,17 @@ def details(ctx: click.Context, concept_id: int) -> None:
 @cli.command()
 @click.argument("concept_id", type=int)
 @click.option("--relationship-id", help="Filter by relationship type")
-@click.option("--only-standard/--all", default=False, help="Only include standard concepts")
+@click.option(
+    "--only-standard/--all",
+    default=False,
+    help="Only include standard concepts"
+)
 @click.pass_context
 def relationships(
-    ctx: click.Context, concept_id: int, relationship_id: Optional[str], only_standard: bool
+    ctx: click.Context,
+    concept_id: int,
+    relationship_id: Optional[str],
+    only_standard: bool
 ) -> None:
     """Get relationships for a specific concept."""
     client = _create_client(

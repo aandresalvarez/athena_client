@@ -91,38 +91,43 @@ def test_search_result_to_json(mock_search_response):
 
 def test_search_result_to_df(mock_search_response):
     """Test conversion to DataFrame."""
-    with patch("pandas.DataFrame") as mock_df:
-        mock_df.return_value = MagicMock()
-        result = SearchResult(mock_search_response)
-        with patch.dict("sys.modules", {"pandas": MagicMock()}):
-            df = result.to_df()
-            mock_df.assert_called_once()
+    mock_dataframe = MagicMock()
+    mock_pandas = MagicMock()
+    mock_pandas.DataFrame.return_value = mock_dataframe
+    
+    with patch.dict("sys.modules", {"pandas": mock_pandas}):
+        with patch("athena_client.search_result.pd", mock_pandas):
+            SearchResult(mock_search_response)
+            mock_pandas.DataFrame.assert_called_once()
 
 
 def test_search_result_to_df_missing_pandas(mock_search_response):
     """Test error when pandas is missing."""
     result = SearchResult(mock_search_response)
-    with patch("athena_client.search_result.pd", None):
-        with pytest.raises(ImportError):
-            result.to_df()
+    with patch.dict("sys.modules", {"pandas": None}):
+        with patch("athena_client.search_result.pd", None):
+            with pytest.raises(ImportError):
+                result.to_df()
 
 
 def test_search_result_to_yaml(mock_search_response):
     """Test conversion to YAML."""
-    with patch("yaml.dump") as mock_dump:
-        mock_dump.return_value = "yaml content"
-        result = SearchResult(mock_search_response)
-        with patch.dict("sys.modules", {"yaml": MagicMock()}):
+    mock_yaml = MagicMock()
+    mock_yaml.dump.return_value = "yaml content"
+    
+    with patch.dict("sys.modules", {"yaml": mock_yaml}):
+        with patch("athena_client.search_result.yaml", mock_yaml):
+            result = SearchResult(mock_search_response)
             yaml_str = result.to_yaml()
-            mock_dump.assert_called_once()
+            mock_yaml.dump.assert_called_once()
             assert yaml_str == "yaml content"
 
 
 def test_search_result_to_yaml_missing_pyyaml(mock_search_response):
     """Test error when pyyaml is missing."""
     result = SearchResult(mock_search_response)
-    with patch("athena_client.search_result.yaml", None):
-        with patch.dict("sys.modules", {"yaml": None}):
+    with patch.dict("sys.modules", {"yaml": None}):
+        with patch("athena_client.search_result.yaml", None):
             with pytest.raises(ImportError):
                 result.to_yaml()
 

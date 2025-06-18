@@ -32,13 +32,12 @@ def build_headers(method: str, url: str, body: bytes) -> Dict[str, str]:
         "X-Athena-Client-Id": s.ATHENA_CLIENT_ID or "athena-client",
     }
     
-    if s.ATHENA_PRIVATE_KEY:
+    if s.ATHENA_PRIVATE_KEY:  
         # Import here for optional dependency
         try:
-            from datetime import datetime
             from base64 import b64encode
+            from datetime import datetime
             from cryptography.hazmat.primitives import hashes, serialization
-            from cryptography.hazmat.primitives.asymmetric import dsa
             
             nonce = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
             to_sign = f"{method}\n{url}\n\n{nonce}\n{body.decode()}"

@@ -6,12 +6,14 @@ from the Athena API into various output formats.
 """
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, cast
-
-from pydantic import BaseModel
+from typing import Any, Dict, List, Union
 
 from .exceptions import ValidationError
 from .models import Concept, ConceptSearchResponse
+
+# Optional imports
+pd = None
+yaml = None
 
 
 class SearchResult:
@@ -91,13 +93,16 @@ class SearchResult:
         Raises:
             ImportError: If pandas is not installed
         """
-        try:
-            import pandas as pd
-        except ImportError:
-            raise ImportError(
-                "pandas is required for DataFrame output. "
-                "Install with 'pip install \"athena-client[pandas]\"'"
-            )
+        global pd
+        if pd is None:
+            try:
+                import pandas as pd_mod
+                pd = pd_mod
+            except ImportError as err:
+                raise ImportError(
+                    "pandas is required for DataFrame output. "
+                    "Install with 'pip install \"athena-client[pandas]\"'"
+                ) from err
         
         return pd.DataFrame(self.to_list())
     
@@ -123,13 +128,16 @@ class SearchResult:
         Raises:
             ImportError: If PyYAML is not installed
         """
-        try:
-            import yaml
-        except ImportError:
-            raise ImportError(
-                "PyYAML is required for YAML output. "
-                "Install with 'pip install \"athena-client[yaml]\"'"
-            )
+        global yaml
+        if yaml is None:
+            try:
+                import yaml as yaml_mod
+                yaml = yaml_mod
+            except ImportError as err:
+                raise ImportError(
+                    "PyYAML is required for YAML output. "
+                    "Install with 'pip install \"athena-client[yaml]\"'"
+                ) from err
             
         return yaml.dump(self.to_list())
     

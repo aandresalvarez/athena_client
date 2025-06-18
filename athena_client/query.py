@@ -4,7 +4,7 @@ Query DSL for building complex Athena queries.
 This module provides a Query DSL that allows for building complex queries
 using a fluent interface and operator overloading.
 """
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 
 class Q:
@@ -211,7 +211,9 @@ class Q:
         
         if self.query_type == "term":
             query_dict["query"] = self.value
-            query_dict["fields"] = ["name^10", "synonyms^5", "definition^3", "concept_code"]
+            query_dict["fields"] = [
+                "name^10", "synonyms^5", "definition^3", "concept_code"
+            ]
         elif self.query_type == "phrase":
             query_dict["query"] = f'"{self.value}"'
             query_dict["fields"] = ["name^10", "synonyms^5", "definition^3"]

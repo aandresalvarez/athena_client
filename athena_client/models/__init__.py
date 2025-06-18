@@ -4,7 +4,7 @@ Pydantic models for Athena API responses.
 This module defines Pydantic models for the various responses from the Athena API.
 """
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -46,7 +46,9 @@ class Concept(BaseModel):
     domain_id: str = Field(..., description="Domain ID")
     vocabulary_id: str = Field(..., description="Vocabulary ID")
     concept_class_id: str = Field(..., description="Concept class ID")
-    standard_concept: Optional[ConceptType] = Field(None, description="Standard concept flag")
+    standard_concept: Optional[ConceptType] = Field(
+        None, description="Standard concept flag"
+    )
     concept_code: str = Field(..., description="Concept code")
     invalid_reason: Optional[str] = Field(None, description="Invalid reason")
     domain: Domain = Field(..., description="Domain object")
@@ -61,14 +63,20 @@ class ConceptSearchResponse(BaseModel):
     
     content: List[Concept] = Field(..., description="List of concept results")
     pageable: Dict[str, Any] = Field(..., description="Pagination information")
-    total_elements: int = Field(..., description="Total number of results", alias="totalElements")
+    total_elements: int = Field(
+        ..., description="Total number of results", alias="totalElements"
+    )
     last: bool = Field(..., description="Whether this is the last page")
-    total_pages: int = Field(..., description="Total number of pages", alias="totalPages")
+    total_pages: int = Field(
+        ..., description="Total number of pages", alias="totalPages"
+    )
     sort: Dict[str, Any] = Field(..., description="Sort information")
     first: bool = Field(..., description="Whether this is the first page")
     size: int = Field(..., description="Page size")
     number: int = Field(..., description="Page number")
-    number_of_elements: int = Field(..., description="Number of elements in this page", alias="numberOfElements")
+    number_of_elements: int = Field(
+        ..., description="Number of elements in this page", alias="numberOfElements"
+    )
     empty: bool = Field(..., description="Whether the result is empty")
 
 
@@ -80,7 +88,9 @@ class ConceptDetails(BaseModel):
     domain_id: str = Field(..., description="Domain ID")
     vocabulary_id: str = Field(..., description="Vocabulary ID")
     concept_class_id: str = Field(..., description="Concept class ID")
-    standard_concept: Optional[ConceptType] = Field(None, description="Standard concept flag")
+    standard_concept: Optional[ConceptType] = Field(
+        None, description="Standard concept flag"
+    )
     concept_code: str = Field(..., description="Concept code")
     invalid_reason: Optional[str] = Field(None, description="Invalid reason")
     domain: Domain = Field(..., description="Domain object")
@@ -90,7 +100,9 @@ class ConceptDetails(BaseModel):
     valid_end_date: str = Field(..., description="Valid end date")
     # Additional fields specific to details
     synonyms: Optional[List[str]] = Field(None, description="Concept synonyms")
-    additional_information: Optional[Dict[str, Any]] = Field(None, description="Additional information")
+    additional_information: Optional[Dict[str, Any]] = Field(
+        None, description="Additional information"
+    )
 
 
 class RelationshipItem(BaseModel):
@@ -105,7 +117,9 @@ class ConceptRelationship(BaseModel):
     """Response from the /concepts/{id}/relationships endpoint."""
     
     concept_id: int = Field(..., description="Concept ID")
-    relationships: List[RelationshipItem] = Field(..., description="List of relationships")
+    relationships: List[RelationshipItem] = Field(
+        ..., description="List of relationships"
+    )
 
 
 class GraphNode(BaseModel):

@@ -6,10 +6,9 @@ with features like retry, backoff, and timeout handling.
 """
 import json
 import logging
-from typing import Any, Dict, Optional, Tuple, TypeVar, Union, overload
+from typing import Any, Dict, Optional, TypeVar, Union
 from urllib.parse import urljoin
 
-import backoff
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -147,27 +146,13 @@ class HttpClient:
         except requests.exceptions.JSONDecodeError as e:
             raise AthenaError(f"Invalid JSON response: {e}") from e
     
-    @overload
     def request(
-        self, method: str, path: str, params: Optional[Dict[str, Any]] = None,
-        data: Optional[Dict[str, Any]] = None, raw_response: bool = False,
-    ) -> Dict[str, Any]: ...
-    
-    @overload
-    def request(
-        self, method: str, path: str, params: Optional[Dict[str, Any]] = None,
-        data: Optional[Dict[str, Any]] = None, raw_response: bool = True,
-    ) -> requests.Response: ...
-    
-    @backoff.on_exception(
-        backoff.expo,
-        (requests.exceptions.Timeout, requests.exceptions.ConnectionError),
-        max_tries=3,
-        factor=0.3,
-    )
-    def request(
-        self, method: str, path: str, params: Optional[Dict[str, Any]] = None,
-        data: Optional[Dict[str, Any]] = None, raw_response: bool = False,
+        self,
+        method: str,
+        path: str,
+        data: Any = None,
+        params: Optional[Dict[str, Any]] = None,
+        raw_response: bool = False,
     ) -> Union[Dict[str, Any], requests.Response]:
         """
         Make an HTTP request to the Athena API.
@@ -229,7 +214,8 @@ class HttpClient:
             raise NetworkError(f"Network error: {e}") from e
     
     def get(
-        self, path: str, params: Optional[Dict[str, Any]] = None, raw_response: bool = False
+        self, path: str, params: Optional[Dict[str, Any]] = None,
+        raw_response: bool = False
     ) -> Union[Dict[str, Any], requests.Response]:
         """
         Make a GET request to the Athena API.

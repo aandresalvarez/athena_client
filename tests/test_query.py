@@ -1,8 +1,6 @@
 """
 Tests for the Query DSL.
 """
-import pytest
-
 from athena_client.query import Q
 
 

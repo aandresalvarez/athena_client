@@ -3,7 +3,7 @@ Athena API client implementation.
 
 This module provides the core synchronous client for the Athena API.
 """
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from .http import HttpClient
 from .models import ConceptDetails, ConceptRelationsGraph, ConceptRelationship
@@ -104,10 +104,14 @@ class AthenaClient:
             
         # If boosts provided, use debug endpoint and include boosts in request
         if boosts or debug:
-            return self.http.post("/concepts", data={"boosts": boosts} if boosts else {}, params=params)
+            return cast(Dict[str, Any], self.http.post(
+                "/concepts",
+                data={"boosts": boosts} if boosts else {},
+                params=params,
+            ))
         
         # Otherwise use standard GET endpoint
-        return self.http.get("/concepts", params=params)
+        return cast(Dict[str, Any], self.http.get("/concepts", params=params))
     
     def get_concept_details(self, concept_id: int) -> ConceptDetails:
         """
