@@ -4,9 +4,24 @@ Pydantic models for Athena API responses.
 This module defines Pydantic models for the various responses from the Athena API.
 """
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional, cast
 
-from pydantic import BaseModel, Field
+import orjson
+from pydantic import BaseModel as PydanticBaseModel, Field, ConfigDict
+
+
+class BaseModel(PydanticBaseModel):
+    """Project-wide Pydantic base model using orjson."""
+
+    model_config: ClassVar[ConfigDict] = cast(
+        ConfigDict,
+        {
+            "populate_by_name": True,
+            "extra": "ignore",
+            "json_loads": orjson.loads,
+            "json_dumps": lambda v, *, default: orjson.dumps(v, default=default).decode(),
+        },
+    )
 
 
 class Domain(BaseModel):

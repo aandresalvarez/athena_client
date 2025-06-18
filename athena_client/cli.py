@@ -222,6 +222,7 @@ def search(
     )
     
     # Get the appropriate output based on the format
+    output_data: object
     if ctx.obj["output"] == "json":
         output_data = results.to_json()
     elif ctx.obj["output"] == "yaml":
@@ -243,6 +244,7 @@ def details(ctx: click.Context, concept_id: int) -> None:
     
     result = client.details(concept_id)
     
+    output_data: object
     if ctx.obj["output"] == "json":
         output_data = result.model_dump_json(indent=2)
     elif ctx.obj["output"] == "yaml":
@@ -279,7 +281,8 @@ def relationships(
         relationship_id=relationship_id,
         only_standard=only_standard,
     )
-    
+
+    output_data: object
     if ctx.obj["output"] == "json":
         output_data = result.model_dump_json(indent=2)
     elif ctx.obj["output"] == "yaml":
@@ -309,7 +312,8 @@ def graph(
         depth=depth,
         zoom_level=zoom_level,
     )
-    
+
+    output_data: object
     if ctx.obj["output"] == "json":
         output_data = result.model_dump_json(indent=2)
     elif ctx.obj["output"] == "yaml":

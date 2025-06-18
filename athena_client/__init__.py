@@ -59,7 +59,7 @@ class Athena:
         exact: Optional[str] = None,
         fuzzy: bool = False,
         wildcard: Optional[str] = None,
-        boosts: Optional[dict] = None,
+        boosts: Optional[dict[str, Any]] = None,
         debug: bool = False,
         page_size: int = 20,
         page: int = 0,
@@ -91,7 +91,7 @@ class Athena:
         # Handle Q object if provided
         query_str = query
         if hasattr(query, "to_boosts") and callable(query.to_boosts):
-            boosts = query.to_boosts()  # type: ignore
+            boosts = query.to_boosts()
             query_str = ""
             
         data = self._client.search_concepts(
@@ -193,7 +193,7 @@ class Athena:
         }
     
     @staticmethod
-    def capabilities() -> Dict[str, Dict]:
+    def capabilities() -> Dict[str, Dict[str, Any]]:
         """
         Get machine-readable manifest of all supported verbs.
         

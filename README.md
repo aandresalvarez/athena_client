@@ -105,6 +105,10 @@ q = (Q.term("diabetes") & Q.term("type 2")) | Q.exact('"diabetic nephropathy"')
 results = athena.search(q)
 ```
 
+### Property-Based Tests
+
+We use **Hypothesis** for edge-case discovery. New core utilities or parsers **must** include at least one Hypothesis scenario.
+
 ## Modern Installation & Packaging
 
 This project uses the modern Python packaging standard with `pyproject.toml` for build and dependency management. You do not need to use `setup.py` for installation or development. Instead, use the following commands:
