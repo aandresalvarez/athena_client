@@ -8,23 +8,13 @@ version = "1.0.0"
 description = "Production-ready Python SDK for the OHDSI Athena Concepts API"
 readme = "README.md"
 requires-python = ">=3.9"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Athena-Client Core Engineering Team"}
 ]
-classifiers = [
-    "Development Status :: 5 - Production/Stable",
-    "Intended Audience :: Science/Research",
-    "Intended Audience :: Healthcare Industry",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Topic :: Scientific/Engineering :: Medical Science Apps.",
-]
+
+[tool.setuptools]
+packages = { find = { include = ["athena_client*"] } }
 dependencies = [
     "requests>=2.25.0",
     "urllib3>=1.26.0",
