@@ -3,11 +3,13 @@ Pydantic models for Athena API responses.
 
 This module defines Pydantic models for the various responses from the Athena API.
 """
+
 from enum import Enum
-from typing import Any, ClassVar, Dict, List, Optional, cast
+from typing import Any, ClassVar, Dict, List, Optional, Union, cast
 
 import orjson
-from pydantic import BaseModel as PydanticBaseModel, Field, ConfigDict
+from pydantic import BaseModel as PydanticBaseModel
+from pydantic import ConfigDict, Field
 
 
 def _json_dumps(value: Any, *, default: Any) -> str:
@@ -23,36 +25,45 @@ class BaseModel(PydanticBaseModel):
         {
             "populate_by_name": True,
             "extra": "ignore",
-            "json_loads": orjson.loads,
-            "json_dumps": _json_dumps,
         },
     )
+
+    def model_dump_json(self, **kwargs: Any) -> str:
+        """Serialize model to JSON using orjson."""
+        return orjson.dumps(self.model_dump(**kwargs)).decode()
+
+    @classmethod
+    def model_validate_json(
+        cls: type["BaseModel"], json_data: Union[str, bytes], **kwargs: Any
+    ) -> "BaseModel":
+        """Deserialize model from JSON using orjson."""
+        return cls.model_validate(orjson.loads(json_data), **kwargs)
 
 
 class Domain(BaseModel):
     """Domain information for a concept."""
-    
+
     id: int = Field(..., description="Domain ID")
     name: str = Field(..., description="Domain name")
 
 
 class Vocabulary(BaseModel):
     """Vocabulary information for a concept."""
-    
+
     id: str = Field(..., description="Vocabulary ID")
     name: str = Field(..., description="Vocabulary name")
 
 
 class ConceptClass(BaseModel):
     """Concept class information."""
-    
+
     id: str = Field(..., description="Concept class ID")
     name: str = Field(..., description="Concept class name")
 
 
 class ConceptType(str, Enum):
     """Concept standard type."""
-    
+
     STANDARD = "S"
     CLASSIFICATION = "C"
     NON_STANDARD = ""
@@ -60,7 +71,7 @@ class ConceptType(str, Enum):
 
 class Concept(BaseModel):
     """Basic concept information returned in search results."""
-    
+
     id: int = Field(..., description="Concept ID")
     name: str = Field(..., description="Concept name")
     domain_id: str = Field(..., description="Domain ID")
@@ -80,7 +91,7 @@ class Concept(BaseModel):
 
 class ConceptSearchResponse(BaseModel):
     """Response from the /concepts search endpoint."""
-    
+
     content: List[Concept] = Field(..., description="List of concept results")
     pageable: Dict[str, Any] = Field(..., description="Pagination information")
     total_elements: int = Field(
@@ -102,7 +113,7 @@ class ConceptSearchResponse(BaseModel):
 
 class ConceptDetails(BaseModel):
     """Detailed concept information from the /concepts/{id} endpoint."""
-    
+
     id: int = Field(..., description="Concept ID")
     name: str = Field(..., description="Concept name")
     domain_id: str = Field(..., description="Domain ID")
@@ -127,7 +138,7 @@ class ConceptDetails(BaseModel):
 
 class RelationshipItem(BaseModel):
     """Information about a relationship between concepts."""
-    
+
     relationship_id: str = Field(..., description="Relationship ID")
     relationship_name: str = Field(..., description="Relationship name")
     relationship_concept_id: int = Field(..., description="Relationship concept ID")
@@ -135,7 +146,7 @@ class RelationshipItem(BaseModel):
 
 class ConceptRelationship(BaseModel):
     """Response from the /concepts/{id}/relationships endpoint."""
-    
+
     concept_id: int = Field(..., description="Concept ID")
     relationships: List[RelationshipItem] = Field(
         ..., description="List of relationships"
@@ -144,17 +155,19 @@ class ConceptRelationship(BaseModel):
 
 class GraphNode(BaseModel):
     """Node in the concept relationship graph."""
-    
+
     id: int = Field(..., description="Node ID")
     name: str = Field(..., description="Node name")
     concept_id: int = Field(..., description="Concept ID")
     domain_id: str = Field(..., description="Domain ID")
-    standard_concept: Optional[ConceptType] = Field(None, description="Standard concept flag")
+    standard_concept: Optional[ConceptType] = Field(
+        None, description="Standard concept flag"
+    )
 
 
 class GraphEdge(BaseModel):
     """Edge in the concept relationship graph."""
-    
+
     source: int = Field(..., description="Source node ID")
     target: int = Field(..., description="Target node ID")
     relationship_id: str = Field(..., description="Relationship ID")
@@ -162,7 +175,7 @@ class GraphEdge(BaseModel):
 
 class ConceptRelationsGraph(BaseModel):
     """Response from the /concepts/{id}/relations endpoint."""
-    
+
     nodes: List[GraphNode] = Field(..., description="Graph nodes")
     edges: List[GraphEdge] = Field(..., description="Graph edges")
 

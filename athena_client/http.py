@@ -4,6 +4,7 @@ HTTP client implementation for Athena API.
 This module provides HTTP clients for making requests to the Athena API,
 with features like retry, backoff, and timeout handling.
 """
+
 import json
 import logging
 from typing import Any, Dict, Optional, TypeVar, Union
@@ -26,14 +27,14 @@ logger = logging.getLogger(__name__)
 class HttpClient:
     """
     Synchronous HTTP client for making requests to the Athena API.
-    
+
     Features:
     - Automatic retry with exponential backoff
     - Custom timeout handling
     - Authentication header generation
     - Error handling and mapping to typed exceptions
     """
-    
+
     def __init__(
         self,
         base_url: Optional[str] = None,
@@ -46,7 +47,7 @@ class HttpClient:
     ) -> None:
         """
         Initialize the HTTP client with configuration.
-        
+
         Args:
             base_url: Base URL for the Athena API
             token: Bearer token for authentication
@@ -57,10 +58,10 @@ class HttpClient:
             backoff_factor: Exponential backoff factor for retries
         """
         settings = get_settings()
-        
+
         # Use provided values or fall back to settings
         self.base_url = base_url or settings.ATHENA_BASE_URL
-        
+
         # Set up token and HMAC if provided
         if token is not None:
             settings.ATHENA_TOKEN = token
@@ -68,58 +69,58 @@ class HttpClient:
             settings.ATHENA_CLIENT_ID = client_id
         if private_key is not None:
             settings.ATHENA_PRIVATE_KEY = private_key
-            
+
         self.timeout = timeout or settings.ATHENA_TIMEOUT_SECONDS
         self.max_retries = max_retries or settings.ATHENA_MAX_RETRIES
         self.backoff_factor = backoff_factor or settings.ATHENA_BACKOFF_FACTOR
-        
+
         # Create session with retry configuration
         self.session = self._create_session()
-        
+
     def _create_session(self) -> requests.Session:
         """
         Create and configure a requests Session with retry logic.
-        
+
         Returns:
             Configured requests.Session object
         """
         session = requests.Session()
-        
+
         retry_strategy = Retry(
             total=self.max_retries,
             backoff_factor=self.backoff_factor,
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=["GET", "POST"],
         )
-        
+
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
-        
+
         return session
-    
+
     def _build_url(self, path: str) -> str:
         """
         Build full URL by joining base URL and path.
-        
+
         Args:
             path: API endpoint path
-            
+
         Returns:
             Full URL
         """
         return urljoin(self.base_url, path)
-    
+
     def _handle_response(self, response: requests.Response) -> Dict[str, Any]:
         """
         Handle API response and raise appropriate exceptions.
-        
+
         Args:
             response: HTTP response from requests
-            
+
         Returns:
             Parsed JSON response
-            
+
         Raises:
             ClientError: For 4xx status codes
             ServerError: For 5xx status codes
@@ -145,7 +146,7 @@ class HttpClient:
                 raise
         except requests.exceptions.JSONDecodeError as e:
             raise AthenaError(f"Invalid JSON response: {e}") from e
-    
+
     def request(
         self,
         method: str,
@@ -156,17 +157,17 @@ class HttpClient:
     ) -> Union[Dict[str, Any], requests.Response]:
         """
         Make an HTTP request to the Athena API.
-        
+
         Args:
             method: HTTP method (GET, POST, etc.)
             path: API endpoint path
             params: Query parameters
             data: Request body data
             raw_response: Whether to return the raw response object
-            
+
         Returns:
             Parsed JSON response or raw Response object
-            
+
         Raises:
             ClientError: For 4xx status codes
             ServerError: For 5xx status codes
@@ -174,22 +175,22 @@ class HttpClient:
         """
         url = self._build_url(path)
         body_bytes = b""
-        
+
         # Convert data to JSON bytes if provided
         if data is not None:
             body_bytes = json.dumps(data).encode("utf-8")
-            
+
         # Build authentication headers
         headers = build_headers(method, url, body_bytes)
-        
+
         # Add Content-Type header if sending data
         if data is not None:
             headers["Content-Type"] = "application/json"
-        
+
         # Generate a correlation ID for logging
         correlation_id = f"req-{id(self)}-{id(path)}"
         logger.debug(f"[{correlation_id}] {method} {url}")
-            
+
         try:
             response = self.session.request(
                 method=method,
@@ -199,51 +200,56 @@ class HttpClient:
                 headers=headers,
                 timeout=self.timeout,
             )
-            
-            logger.debug(
-                f"[{correlation_id}] {response.status_code} {response.reason}"
-            )
-                
+
+            logger.debug(f"[{correlation_id}] {response.status_code} {response.reason}")
+
             if raw_response:
                 return response
-                
+
             return self._handle_response(response)
-            
+
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
             logger.warning(f"[{correlation_id}] Network error: {e}")
             raise NetworkError(f"Network error: {e}") from e
-    
+
     def get(
-        self, path: str, params: Optional[Dict[str, Any]] = None,
-        raw_response: bool = False
+        self,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        raw_response: bool = False,
     ) -> Union[Dict[str, Any], requests.Response]:
         """
         Make a GET request to the Athena API.
-        
+
         Args:
             path: API endpoint path
             params: Query parameters
             raw_response: Whether to return the raw response object
-            
+
         Returns:
             Parsed JSON response or raw Response object
         """
         return self.request("GET", path, params=params, raw_response=raw_response)
-    
+
     def post(
-        self, path: str, data: Dict[str, Any], params: Optional[Dict[str, Any]] = None,
-        raw_response: bool = False
+        self,
+        path: str,
+        data: Dict[str, Any],
+        params: Optional[Dict[str, Any]] = None,
+        raw_response: bool = False,
     ) -> Union[Dict[str, Any], requests.Response]:
         """
         Make a POST request to the Athena API.
-        
+
         Args:
             path: API endpoint path
             data: Request body data
             params: Query parameters
             raw_response: Whether to return the raw response object
-            
+
         Returns:
             Parsed JSON response or raw Response object
         """
-        return self.request("POST", path, data=data, params=params, raw_response=raw_response)
+        return self.request(
+            "POST", path, data=data, params=params, raw_response=raw_response
+        )

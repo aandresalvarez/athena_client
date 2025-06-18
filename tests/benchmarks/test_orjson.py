@@ -1,4 +1,5 @@
 import json
+
 import pytest
 
 from athena_client.models import Concept, ConceptSearchResponse

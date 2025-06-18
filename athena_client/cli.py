@@ -3,6 +3,7 @@ Command-line interface for the Athena client.
 
 This module provides a CLI for interacting with the Athena API.
 """
+
 import json
 import sys
 from typing import Any, Optional
@@ -39,13 +40,13 @@ def _create_client(
 ) -> Athena:
     """
     Create an Athena client with the given parameters.
-    
+
     Args:
         base_url: Base URL for the Athena API
         token: Bearer token for authentication
         timeout: HTTP timeout in seconds
         retries: Maximum number of retry attempts
-        
+
     Returns:
         Athena client
     """
@@ -57,14 +58,10 @@ def _create_client(
     )
 
 
-def _format_output(
-    data: object,
-    output: str,
-    console: Optional[Console] = None
-) -> None:
+def _format_output(data: object, output: str, console: Any = None) -> None:
     """
     Format and print data based on the requested output format.
-    
+
     Args:
         data: Data to format and print
         output: Output format (json, yaml, table, pretty)
@@ -84,7 +81,7 @@ def _format_output(
                 "Install with 'pip install \"athena-client[yaml]\"'"
             )
             sys.exit(1)
-            
+
         print(yaml.dump(data))
     elif output == "table" and console is not None and rich is not None:
         if hasattr(data, "to_list"):
@@ -93,9 +90,9 @@ def _format_output(
             if not results:
                 console.print("[yellow]No results found[/yellow]")
                 return
-                
+
             table = Table(title="Athena Concepts")
-            
+
             # Add columns
             table.add_column("ID", style="cyan")
             table.add_column("Name", style="green")
@@ -103,7 +100,7 @@ def _format_output(
             table.add_column("Vocabulary", style="blue")
             table.add_column("Domain", style="yellow")
             table.add_column("Class", style="red")
-            
+
             # Add rows
             for item in results:
                 table.add_row(
@@ -114,7 +111,7 @@ def _format_output(
                     item["domain"]["name"],
                     item["concept_class"]["name"],
                 )
-                
+
             console.print(table)
         else:
             # Just pretty-print JSON for other data types
@@ -161,14 +158,15 @@ def _format_output(
     help="Maximum number of retry attempts",
 )
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     type=click.Choice(["json", "yaml", "table", "pretty"]),
     default="table",
     help="Output format",
 )
 @click.pass_context
 def cli(
-    ctx: click.Context,
+    ctx: Any,
     base_url: Optional[str],
     token: Optional[str],
     timeout: Optional[int],
@@ -182,7 +180,7 @@ def cli(
     ctx.obj["timeout"] = timeout
     ctx.obj["retries"] = retries
     ctx.obj["output"] = output
-    
+
     # Set up rich console if available
     if rich is not None:
         ctx.obj["console"] = Console()
@@ -199,7 +197,7 @@ def cli(
 @click.option("--vocabulary", help="Filter by vocabulary")
 @click.pass_context
 def search(
-    ctx: click.Context,
+    ctx: Any,
     query: str,
     fuzzy: bool,
     page_size: int,
@@ -211,7 +209,7 @@ def search(
     client = _create_client(
         ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
     )
-    
+
     results = client.search(
         query,
         fuzzy=fuzzy,
@@ -220,7 +218,7 @@ def search(
         domain=domain,
         vocabulary=vocabulary,
     )
-    
+
     # Get the appropriate output based on the format
     output_data: Any
     if ctx.obj["output"] == "json":
@@ -229,29 +227,30 @@ def search(
         output_data = results.to_yaml()
     else:
         output_data = results
-        
+
     _format_output(output_data, ctx.obj["output"], ctx.obj.get("console"))
 
 
 @cli.command()
 @click.argument("concept_id", type=int)
 @click.pass_context
-def details(ctx: click.Context, concept_id: int) -> None:
+def details(ctx: Any, concept_id: int) -> None:
     """Get detailed information for a specific concept."""
     client = _create_client(
         ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
     )
-    
+
     result = client.details(concept_id)
     output_data: Any
     if ctx.obj["output"] == "json":
         output_data = result.model_dump_json(indent=2)
     elif ctx.obj["output"] == "yaml":
         import yaml
+
         output_data = yaml.dump(result.model_dump())
     else:
         output_data = result.model_dump()
-    
+
     _format_output(output_data, ctx.obj["output"], ctx.obj.get("console"))
 
 
@@ -259,22 +258,20 @@ def details(ctx: click.Context, concept_id: int) -> None:
 @click.argument("concept_id", type=int)
 @click.option("--relationship-id", help="Filter by relationship type")
 @click.option(
-    "--only-standard/--all",
-    default=False,
-    help="Only include standard concepts"
+    "--only-standard/--all", default=False, help="Only include standard concepts"
 )
 @click.pass_context
 def relationships(
-    ctx: click.Context,
+    ctx: Any,
     concept_id: int,
     relationship_id: Optional[str],
-    only_standard: bool
+    only_standard: bool,
 ) -> None:
     """Get relationships for a specific concept."""
     client = _create_client(
         ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
     )
-    
+
     result = client.relationships(
         concept_id,
         relationship_id=relationship_id,
@@ -285,10 +282,11 @@ def relationships(
         output_data = result.model_dump_json(indent=2)
     elif ctx.obj["output"] == "yaml":
         import yaml
+
         output_data = yaml.dump(result.model_dump())
     else:
         output_data = result.model_dump()
-    
+
     _format_output(output_data, ctx.obj["output"], ctx.obj.get("console"))
 
 
@@ -297,14 +295,12 @@ def relationships(
 @click.option("--depth", type=int, default=10, help="Maximum depth of relationships")
 @click.option("--zoom-level", type=int, default=4, help="Zoom level for the graph")
 @click.pass_context
-def graph(
-    ctx: click.Context, concept_id: int, depth: int, zoom_level: int
-) -> None:
+def graph(ctx: Any, concept_id: int, depth: int, zoom_level: int) -> None:
     """Get relationship graph for a specific concept."""
     client = _create_client(
         ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
     )
-    
+
     result = client.graph(
         concept_id,
         depth=depth,
@@ -315,37 +311,38 @@ def graph(
         output_data = result.model_dump_json(indent=2)
     elif ctx.obj["output"] == "yaml":
         import yaml
+
         output_data = yaml.dump(result.model_dump())
     else:
         output_data = result.model_dump()
-    
+
     _format_output(output_data, ctx.obj["output"], ctx.obj.get("console"))
 
 
 @cli.command()
 @click.argument("concept_id", type=int)
 @click.pass_context
-def summary(ctx: click.Context, concept_id: int) -> None:
+def summary(ctx: Any, concept_id: int) -> None:
     """Get a comprehensive summary for a concept."""
     client = _create_client(
         ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
     )
-    
+
     result = client.summary(concept_id)
-    
+
     # Convert Pydantic models to dicts for serialization
     output_data = {
         "details": result["details"].model_dump(),
         "relationships": result["relationships"].model_dump(),
         "graph": result["graph"].model_dump(),
     }
-    
+
     _format_output(output_data, ctx.obj["output"], ctx.obj.get("console"))
 
 
 @cli.command(name="caps")
 @click.pass_context
-def capabilities(ctx: click.Context) -> None:
+def capabilities(ctx: Any) -> None:
     """List capabilities of the Athena client."""
     caps = Athena.capabilities()
     _format_output(caps, ctx.obj["output"], ctx.obj.get("console"))

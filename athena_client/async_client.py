@@ -3,6 +3,7 @@ Asynchronous Athena API client implementation.
 
 This module provides an asynchronous client for the Athena API using httpx.
 """
+
 import json
 import logging
 from typing import Any, Dict, Optional, Union, cast
@@ -29,14 +30,14 @@ logger = logging.getLogger(__name__)
 class AsyncHttpClient:
     """
     Asynchronous HTTP client for making requests to the Athena API.
-    
+
     Features:
     - Automatic retry with exponential backoff
     - Custom timeout handling
     - Authentication header generation
     - Error handling and mapping to typed exceptions
     """
-    
+
     def __init__(
         self,
         base_url: Optional[str] = None,
@@ -49,7 +50,7 @@ class AsyncHttpClient:
     ) -> None:
         """
         Initialize the async HTTP client with configuration.
-        
+
         Args:
             base_url: Base URL for the Athena API
             token: Bearer token for authentication
@@ -60,10 +61,10 @@ class AsyncHttpClient:
             backoff_factor: Exponential backoff factor for retries
         """
         settings = get_settings()
-        
+
         # Use provided values or fall back to settings
         self.base_url = base_url or settings.ATHENA_BASE_URL
-        
+
         # Set up token and HMAC if provided
         if token is not None:
             settings.ATHENA_TOKEN = token
@@ -71,36 +72,36 @@ class AsyncHttpClient:
             settings.ATHENA_CLIENT_ID = client_id
         if private_key is not None:
             settings.ATHENA_PRIVATE_KEY = private_key
-            
+
         self.timeout = timeout or settings.ATHENA_TIMEOUT_SECONDS
         self.max_retries = max_retries or settings.ATHENA_MAX_RETRIES
         self.backoff_factor = backoff_factor or settings.ATHENA_BACKOFF_FACTOR
-        
+
         # Create httpx client
         self.client = httpx.AsyncClient(timeout=self.timeout)
-    
+
     def _build_url(self, path: str) -> str:
         """
         Build full URL by joining base URL and path.
-        
+
         Args:
             path: API endpoint path
-            
+
         Returns:
             Full URL
         """
         return urljoin(self.base_url, path)
-    
+
     async def _handle_response(self, response: httpx.Response) -> Dict[str, Any]:
         """
         Handle API response and raise appropriate exceptions.
-        
+
         Args:
             response: HTTP response from httpx
-            
+
         Returns:
             Parsed JSON response
-            
+
         Raises:
             ClientError: For 4xx status codes
             ServerError: For 5xx status codes
@@ -126,7 +127,7 @@ class AsyncHttpClient:
                 raise
         except httpx.DecodingError as e:
             raise AthenaError(f"Invalid JSON response: {e}") from e
-    
+
     @backoff.on_exception(
         backoff.expo,
         (httpx.TimeoutException, httpx.ConnectError),
@@ -134,22 +135,26 @@ class AsyncHttpClient:
         factor=0.3,
     )
     async def request(
-        self, method: str, path: str, params: Optional[Dict[str, Any]] = None,
-        data: Optional[Dict[str, Any]] = None, raw_response: bool = False,
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        raw_response: bool = False,
     ) -> Union[Dict[str, Any], httpx.Response]:
         """
         Make an HTTP request to the Athena API.
-        
+
         Args:
             method: HTTP method (GET, POST, etc.)
             path: API endpoint path
             params: Query parameters
             data: Request body data
             raw_response: Whether to return the raw response object
-            
+
         Returns:
             Parsed JSON response or raw Response object
-            
+
         Raises:
             ClientError: For 4xx status codes
             ServerError: For 5xx status codes
@@ -157,22 +162,22 @@ class AsyncHttpClient:
         """
         url = self._build_url(path)
         body_bytes = b""
-        
+
         # Convert data to JSON bytes if provided
         if data is not None:
             body_bytes = json.dumps(data).encode("utf-8")
-            
+
         # Build authentication headers
         headers = build_headers(method, url, body_bytes)
-        
+
         # Add Content-Type header if sending data
         if data is not None:
             headers["Content-Type"] = "application/json"
-        
+
         # Generate a correlation ID for logging
         correlation_id = f"req-{id(self)}-{id(path)}"
         logger.debug(f"[{correlation_id}] {method} {url}")
-            
+
         try:
             response = await self.client.request(
                 method=method,
@@ -182,20 +187,20 @@ class AsyncHttpClient:
                 headers=headers,
                 timeout=self.timeout,
             )
-            
+
             logger.debug(
                 f"[{correlation_id}] {response.status_code} {response.reason_phrase}"
             )
-                
+
             if raw_response:
                 return response
-                
+
             return await self._handle_response(response)
-            
+
         except (httpx.TimeoutException, httpx.ConnectError) as e:
             logger.warning(f"[{correlation_id}] Network error: {e}")
             raise NetworkError(f"Network error: {e}") from e
-        
+
     async def get(
         self,
         path: str,
@@ -204,17 +209,17 @@ class AsyncHttpClient:
     ) -> Union[Dict[str, Any], httpx.Response]:
         """
         Make a GET request to the Athena API.
-        
+
         Args:
             path: API endpoint path
             params: Query parameters
             raw_response: Whether to return the raw response object
-            
+
         Returns:
             Parsed JSON response or raw Response object
         """
         return await self.request("GET", path, params=params, raw_response=raw_response)
-    
+
     async def post(
         self,
         path: str,
@@ -224,13 +229,13 @@ class AsyncHttpClient:
     ) -> Union[Dict[str, Any], httpx.Response]:
         """
         Make a POST request to the Athena API.
-        
+
         Args:
             path: API endpoint path
             data: Request body data
             params: Query parameters
             raw_response: Whether to return the raw response object
-            
+
         Returns:
             Parsed JSON response or raw Response object
         """
@@ -242,11 +247,11 @@ class AsyncHttpClient:
 class AthenaAsyncClient:
     """
     Asynchronous client for the Athena API.
-    
+
     This class provides asynchronous access to all Athena API endpoints
     with minimal abstraction, returning parsed Pydantic models.
     """
-    
+
     def __init__(
         self,
         base_url: Optional[str] = None,
@@ -259,7 +264,7 @@ class AthenaAsyncClient:
     ) -> None:
         """
         Initialize the async Athena client with configuration.
-        
+
         Args:
             base_url: Base URL for the Athena API
             token: Bearer token for authentication
@@ -278,7 +283,7 @@ class AthenaAsyncClient:
             max_retries=max_retries,
             backoff_factor=backoff_factor,
         )
-    
+
     async def search_concepts(
         self,
         query: str = "",
@@ -295,7 +300,7 @@ class AthenaAsyncClient:
     ) -> Dict[str, Any]:
         """
         Search for concepts in the Athena vocabulary.
-        
+
         Args:
             query: The search query string
             exact: Exact match phrase
@@ -308,16 +313,16 @@ class AthenaAsyncClient:
             domain: Filter by domain
             vocabulary: Filter by vocabulary
             standard_concept: Filter by standard concept status
-            
+
         Returns:
             Raw API response data
         """
         params: Dict[str, Any] = {"pageSize": page_size, "page": page}
-        
+
         # Add query if provided
         if query:
             params["query"] = query
-        
+
         # Add filters if provided
         if exact:
             params["exact"] = exact
@@ -331,7 +336,7 @@ class AthenaAsyncClient:
             params["vocabulary"] = vocabulary
         if standard_concept:
             params["standardConcept"] = standard_concept
-            
+
         # If boosts provided, use debug endpoint and include boosts in request
         if boosts or debug:
             response = await self.http.post(
@@ -340,25 +345,25 @@ class AthenaAsyncClient:
                 params=params,
             )
             return cast(Dict[str, Any], response)
-        
+
         # Otherwise use standard GET endpoint
         response = await self.http.get("/concepts", params=params)
         return cast(Dict[str, Any], response)
-    
+
     async def get_concept_details(self, concept_id: int) -> ConceptDetails:
         """
         Get detailed information for a specific concept.
-        
+
         Args:
             concept_id: The concept ID to get details for
-            
+
         Returns:
             ConceptDetails object
         """
         response = await self.http.get(f"/concepts/{concept_id}")
         data = cast(Dict[str, Any], response)
         return ConceptDetails.model_validate(data)
-    
+
     async def get_concept_relationships(
         self,
         concept_id: int,
@@ -367,28 +372,28 @@ class AthenaAsyncClient:
     ) -> ConceptRelationship:
         """
         Get relationships for a specific concept.
-        
+
         Args:
             concept_id: The concept ID to get relationships for
             relationship_id: Filter by relationship type
             only_standard: Only include standard concepts
-            
+
         Returns:
             ConceptRelationship object
         """
         params: Dict[str, Any] = {}
-        
+
         if relationship_id:
             params["relationshipId"] = relationship_id
         if only_standard:
             params["standardConcepts"] = "true"
-            
+
         response = await self.http.get(
             f"/concepts/{concept_id}/relationships", params=params
         )
         data = cast(Dict[str, Any], response)
         return ConceptRelationship.model_validate(data)
-    
+
     async def get_concept_graph(
         self,
         concept_id: int,
@@ -397,12 +402,12 @@ class AthenaAsyncClient:
     ) -> ConceptRelationsGraph:
         """
         Get relationship graph for a specific concept.
-        
+
         Args:
             concept_id: The concept ID to get graph for
             depth: Maximum depth of relationships to traverse
             zoom_level: Zoom level for the graph
-            
+
         Returns:
             ConceptRelationsGraph object
         """

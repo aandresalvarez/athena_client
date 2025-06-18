@@ -1,6 +1,7 @@
 """
 Tests for the SearchResult class.
 """
+
 import json
 from unittest.mock import MagicMock, patch
 
@@ -28,7 +29,7 @@ def mock_search_response():
                 "invalid_reason": None,
                 "domain": {"id": 13, "name": "Drug"},
                 "vocabulary": {"id": "RxNorm", "name": "RxNorm"},
-                "concept_class": {"id": "Ingredient", "name": "Ingredient"}
+                "concept_class": {"id": "Ingredient", "name": "Ingredient"},
             }
         ],
         "pageable": {
@@ -37,7 +38,7 @@ def mock_search_response():
             "pageNumber": 0,
             "offset": 0,
             "paged": True,
-            "unpaged": False
+            "unpaged": False,
         },
         "totalElements": 1,
         "last": True,
@@ -47,7 +48,7 @@ def mock_search_response():
         "size": 20,
         "number": 0,
         "numberOfElements": 1,
-        "empty": False
+        "empty": False,
     }
 
 
@@ -94,7 +95,7 @@ def test_search_result_to_df(mock_search_response):
     mock_dataframe = MagicMock()
     mock_pandas = MagicMock()
     mock_pandas.DataFrame.return_value = mock_dataframe
-    
+
     with patch.dict("sys.modules", {"pandas": mock_pandas}):
         with patch("athena_client.search_result.pd", mock_pandas):
             result = SearchResult(mock_search_response)
@@ -115,7 +116,7 @@ def test_search_result_to_yaml(mock_search_response):
     """Test conversion to YAML."""
     mock_yaml = MagicMock()
     mock_yaml.dump.return_value = "yaml content"
-    
+
     with patch.dict("sys.modules", {"yaml": mock_yaml}):
         with patch("athena_client.search_result.yaml", mock_yaml):
             result = SearchResult(mock_search_response)
@@ -138,8 +139,8 @@ def test_search_result_to_csv(mock_search_response):
     with patch("athena_client.search_result.SearchResult.to_df") as mock_to_df:
         mock_df = MagicMock()
         mock_to_df.return_value = mock_df
-        
+
         result = SearchResult(mock_search_response)
         result.to_csv("test.csv")
-        
+
         mock_df.to_csv.assert_called_once_with("test.csv", index=False)

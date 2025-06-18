@@ -68,8 +68,9 @@ dev = [
   "pandas-stubs"
 ]
 
+
 [tool.hatch.envs.default]
-features = ["dev"]
+features = ["dev", "all"]
 
 [project.scripts]
 athena = "athena_client.cli:main"
@@ -83,10 +84,11 @@ Issues = "https://github.com/username/athena-client/issues"
 line-length = 88
 target-version = ["py39"]
 
+
 [tool.ruff]
 target-version = "py39"
 line-length = 88
-select = ["E", "F", "B", "I"]
+lint.select = ["E", "F", "B", "I"]
 
 [tool.mypy]
 python_version = "3.9"
@@ -106,13 +108,12 @@ format = "ruff format athena_client tests"
 type-check = "mypy athena_client"
 test = "pytest {args}"
 cov = "pytest --cov=athena_client --cov-report=term-missing {args}"
-bandit = "!bandit -c pyproject.toml -r athena_client -s B101,B404,B603"
+bandit-check = "bandit -c pyproject.toml -r athena_client -s B101,B404,B603"
 cyclonedx = "cyclonedx-py --format json --output sbom.json"
 
 quality = [
   "format",
   "lint",
   "type-check",
-  "bandit",
+  "bandit-check",
 ]
-

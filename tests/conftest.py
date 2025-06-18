@@ -1,6 +1,7 @@
 """
 Test fixtures and configuration for athena-client tests.
 """
+
 from unittest.mock import patch
 
 import pytest

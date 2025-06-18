@@ -122,8 +122,12 @@ pip install .
 
 Or, for development (editable install with dev dependencies):
 
+> **Note:** For editable installs with extras, make sure you have recent versions of pip and setuptools:
+> ```bash
+> pip install --upgrade pip setuptools
+> ```
 ```bash
-pip install -e .[dev]
+pip install -e '.[dev]'
 ```
 
 ### Why `pyproject.toml`?

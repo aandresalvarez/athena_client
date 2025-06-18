@@ -1,10 +1,10 @@
 """
 athena-client: Production-ready Python SDK for the OHDSI Athena Concepts API
 """
+
 from typing import Any, Dict, Optional
 
 from .models import ConceptDetails, ConceptRelationsGraph, ConceptRelationship
-
 
 __version__ = "1.0.0"
 
@@ -12,11 +12,11 @@ __version__ = "1.0.0"
 class Athena:
     """
     Main facade for the Athena API client.
-    
+
     This class provides a simplified interface to the Athena API with six
     intuitive verbs that cover 95% of day-to-day use cases.
     """
-    
+
     def __init__(
         self,
         base_url: Optional[str] = None,
@@ -29,7 +29,7 @@ class Athena:
     ) -> None:
         """
         Initialize the Athena facade with optional configuration.
-        
+
         Args:
             base_url: The base URL for the Athena API.
             token: Bearer token for authentication.
@@ -41,7 +41,7 @@ class Athena:
         """
         # Import here to avoid circular imports
         from .client import AthenaClient  # pylint: disable=import-outside-toplevel
-        
+
         self._client = AthenaClient(
             base_url=base_url,
             token=token,
@@ -51,7 +51,7 @@ class Athena:
             max_retries=max_retries,
             backoff_factor=backoff_factor,
         )
-    
+
     def search(
         self,
         query: Any,  # Can be str or Q object
@@ -69,7 +69,7 @@ class Athena:
     ) -> "SearchResult":
         """
         Search for concepts in the Athena vocabulary.
-        
+
         Args:
             query: The search query string
             exact: Exact match phrase
@@ -82,18 +82,18 @@ class Athena:
             domain: Filter by domain
             vocabulary: Filter by vocabulary
             standard_concept: Filter by standard concept status
-            
+
         Returns:
             SearchResult object containing the search results
         """
         from .search_result import SearchResult
-        
+
         # Handle Q object if provided
         query_str = query
         if hasattr(query, "to_boosts") and callable(query.to_boosts):
             boosts = query.to_boosts()
             query_str = ""
-            
+
         data = self._client.search_concepts(
             query=query_str,
             exact=exact,
@@ -107,21 +107,21 @@ class Athena:
             vocabulary=vocabulary,
             standard_concept=standard_concept,
         )
-        
+
         return SearchResult(data)
-    
+
     def details(self, concept_id: int) -> ConceptDetails:
         """
         Get detailed information for a specific concept.
-        
+
         Args:
             concept_id: The concept ID to get details for
-            
+
         Returns:
             ConceptDetails object
         """
         return self._client.get_concept_details(concept_id)
-    
+
     def relationships(
         self,
         concept_id: int,
@@ -131,12 +131,12 @@ class Athena:
     ) -> ConceptRelationship:
         """
         Get relationships for a specific concept.
-        
+
         Args:
             concept_id: The concept ID to get relationships for
             relationship_id: Filter by relationship type
             only_standard: Only include standard concepts
-            
+
         Returns:
             ConceptRelationship object
         """
@@ -145,7 +145,7 @@ class Athena:
             relationship_id=relationship_id,
             only_standard=only_standard,
         )
-    
+
     def graph(
         self,
         concept_id: int,
@@ -155,12 +155,12 @@ class Athena:
     ) -> ConceptRelationsGraph:
         """
         Get relationship graph for a specific concept.
-        
+
         Args:
             concept_id: The concept ID to get graph for
             depth: Maximum depth of relationships to traverse
             zoom_level: Zoom level for the graph
-            
+
         Returns:
             ConceptRelationsGraph object
         """
@@ -169,34 +169,34 @@ class Athena:
             depth=depth,
             zoom_level=zoom_level,
         )
-    
+
     def summary(self, concept_id: int) -> Dict[str, Any]:
         """
         Get a comprehensive summary for a concept.
-        
+
         This aggregates details, relationships, and graph information.
-        
+
         Args:
             concept_id: The concept ID to summarize
-            
+
         Returns:
             Dictionary containing details, relationships, and graph
         """
         details = self.details(concept_id)
         relationships = self.relationships(concept_id)
         graph = self.graph(concept_id)
-        
+
         return {
             "details": details,
             "relationships": relationships,
             "graph": graph,
         }
-    
+
     @staticmethod
     def capabilities() -> Dict[str, Dict[str, Any]]:
         """
         Get machine-readable manifest of all supported verbs.
-        
+
         Returns:
             Dictionary containing capabilities information
         """
@@ -204,28 +204,29 @@ class Athena:
             "search": {
                 "endpoint": "/concepts",
                 "auth": "anonymous|bearer",
-                "outputs": ["models", "list", "dataframe", "json", "yaml", "csv"]
+                "outputs": ["models", "list", "dataframe", "json", "yaml", "csv"],
             },
             "details": {
                 "endpoint": "/concepts/{id}",
                 "auth": "anonymous|bearer",
-                "outputs": ["model", "json"]
+                "outputs": ["model", "json"],
             },
             "relationships": {
                 "endpoint": "/concepts/{id}/relationships",
                 "auth": "anonymous|bearer",
-                "outputs": ["model", "json"]
+                "outputs": ["model", "json"],
             },
             "graph": {
                 "endpoint": "/concepts/{id}/relations",
                 "auth": "anonymous|bearer",
-                "outputs": ["model", "json"]
+                "outputs": ["model", "json"],
             },
             "summary": {
                 "composed_of": ["details", "relationships", "graph"],
-                "outputs": ["dict"]
-            }
+                "outputs": ["dict"],
+            },
         }
+
 
 # Type hint for return annotation - needed at the end to avoid circular imports
 # This import is used for type hints only, which is why it's placed at the bottom
