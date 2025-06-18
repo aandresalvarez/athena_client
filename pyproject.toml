@@ -14,7 +14,7 @@ authors = [
 ]
 
 [tool.setuptools]
-packages = { find = { include = ["athena_client*"] } }
+packages = { find = { include = ["athena_client*"], exclude = ["output*"] } }
 dependencies = [
     "requests>=2.25.0",
     "urllib3>=1.26.0",
