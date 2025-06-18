@@ -3,7 +3,7 @@ Authentication module for the Athena client.
 
 This module handles Bearer token and HMAC authentication for the Athena API.
 """
-from typing import Dict
+from typing import Any, Dict
 
 from .settings import get_settings
 
@@ -44,7 +44,8 @@ def build_headers(method: str, url: str, body: bytes) -> Dict[str, str]:
             key = serialization.load_pem_private_key(
                 s.ATHENA_PRIVATE_KEY.encode(), password=None
             )
-            sig = key.sign(to_sign.encode(), hashes.SHA256())
+            signing_key: Any = key
+            sig = signing_key.sign(to_sign.encode(), hashes.SHA256())
             hdrs.update({
                 "X-Athena-Nonce": nonce,
                 "X-Athena-Hmac": b64encode(sig).decode()
