@@ -37,6 +37,8 @@ jobs:
         run: hatch run pip list
       - name: Test suite
         run: hatch run cov
+      - name: Install cyclonedx-bom
+        run: pip install cyclonedx-bom
       - name: Generate SBOM
         if: github.ref == 'refs/heads/main'
         run: make cyclonedx
