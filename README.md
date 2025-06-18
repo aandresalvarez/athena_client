@@ -105,6 +105,29 @@ q = (Q.term("diabetes") & Q.term("type 2")) | Q.exact('"diabetic nephropathy"')
 results = athena.search(q)
 ```
 
+## Modern Installation & Packaging
+
+This project uses the modern Python packaging standard with `pyproject.toml` for build and dependency management. You do not need to use `setup.py` for installation or development. Instead, use the following commands:
+
+### Install with pip (recommended)
+
+```bash
+pip install .
+```
+
+Or, for development (editable install with dev dependencies):
+
+```bash
+pip install -e .[dev]
+```
+
+### Why `pyproject.toml`?
+- All build, dependency, and metadata configuration is in `pyproject.toml`.
+- Compatible with modern Python tooling (pip, build, poetry, etc).
+- `setup.py` is only needed for legacy or advanced customizations.
+
+For more details, see [Packaging Python Projects](https://packaging.python.org/en/latest/tutorials/packaging-projects/).
+
 ## Documentation
 
 For complete documentation, visit: [https://athena-client.readthedocs.io](https://athena-client.readthedocs.io)
