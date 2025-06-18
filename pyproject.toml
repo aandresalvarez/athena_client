@@ -98,7 +98,7 @@ type-check = "mypy athena_client"
 test = "pytest {args}"
 cov = "pytest --cov=athena_client --cov-report=term-missing {args}"
 bandit-check = "bandit -c pyproject.toml -r athena_client -s B101,B404,B603"
-cyclonedx = "cyclonedx-py env --format json --output sbom.json"
+cyclonedx = "cyclonedx-py env --output sbom.json --output-format json"
 
 quality = [
   "format",
