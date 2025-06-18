@@ -38,6 +38,7 @@ all = [
 ]
 dev = [
   "ruff>=0.4.0",
+  "cyclonedx-bom>=3.15.0",
   "mypy>=1.10",
   "pip-audit>=2.6",
   "pytest>=8.2",
@@ -97,7 +98,7 @@ type-check = "mypy athena_client"
 test = "pytest {args}"
 cov = "pytest --cov=athena_client --cov-report=term-missing {args}"
 bandit-check = "bandit -c pyproject.toml -r athena_client -s B101,B404,B603"
-cyclonedx = "cyclonedx-py --format json --output sbom.json"
+cyclonedx = "cyclonedx-py env --format json --output sbom.json"
 
 quality = [
   "format",
