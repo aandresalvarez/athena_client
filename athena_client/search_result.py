@@ -5,18 +5,20 @@ This module provides a wrapper around search results that provides
 convenient access to the data in various formats.
 """
 
-from typing import Any, Dict, Iterator, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional
 
 import pandas as pd
 
-from .client import AthenaClient
 from .models import Concept, ConceptSearchResponse
+
+if TYPE_CHECKING:
+    from .client import AthenaClient
 
 
 class SearchResult:
     """Wrapper for search results that provides convenient access methods."""
 
-    def __init__(self, response: ConceptSearchResponse, client: AthenaClient) -> None:
+    def __init__(self, response: ConceptSearchResponse, client: "AthenaClient") -> None:
         """Initialize the search result wrapper.
 
         Args:

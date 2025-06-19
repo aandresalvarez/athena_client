@@ -1,0 +1,335 @@
+"""Tests for the CLI module."""
+
+import json
+import sys
+from unittest.mock import Mock, patch
+
+import pytest
+from click.testing import CliRunner
+
+from athena_client.cli import _create_client, _format_output, cli
+
+
+class TestCLI:
+    """Test cases for the CLI module."""
+
+    def test_create_client(self):
+        """Test client creation with parameters."""
+        with patch("athena_client.cli.Athena") as mock_athena:
+            mock_client = Mock()
+            mock_athena.return_value = mock_client
+
+            result = _create_client(
+                base_url="https://api.example.com",
+                token="test-token",
+                timeout=60,
+                retries=5,
+            )
+
+            mock_athena.assert_called_once_with(
+                base_url="https://api.example.com",
+                token="test-token",
+                timeout=60,
+                max_retries=5,
+            )
+            assert result == mock_client
+
+    def test_create_client_with_none_values(self):
+        """Test client creation with None values."""
+        with patch("athena_client.cli.Athena") as mock_athena:
+            mock_client = Mock()
+            mock_athena.return_value = mock_client
+
+            result = _create_client(None, None, None, None)
+
+            mock_athena.assert_called_once_with(
+                base_url=None,
+                token=None,
+                timeout=None,
+                max_retries=None,
+            )
+            assert result == mock_client
+
+    def test_format_output_json_string(self):
+        """Test JSON output formatting with string input."""
+        data = '{"key": "value"}'
+        _format_output(data, "json")
+        # This should just print the string as-is
+
+    def test_format_output_json_dict(self):
+        """Test JSON output formatting with dictionary input."""
+        data = {"key": "value", "number": 123}
+        
+        with patch("builtins.print") as mock_print:
+            _format_output(data, "json")
+            mock_print.assert_called_once_with(json.dumps(data, indent=2))
+
+    def test_format_output_yaml_success(self):
+        """Test YAML output formatting."""
+        data = {"key": "value", "number": 123}
+        
+        with patch("builtins.__import__") as mock_import:
+            mock_yaml = Mock()
+            mock_yaml.dump.return_value = "key: value\nnumber: 123\n"
+            mock_import.return_value = mock_yaml
+            
+            with patch("builtins.print") as mock_print:
+                _format_output(data, "yaml")
+                mock_print.assert_called_once_with("key: value\nnumber: 123\n")
+
+    def test_format_output_yaml_import_error(self):
+        """Test YAML output formatting when pyyaml is not available."""
+        data = {"key": "value"}
+        
+        with patch("builtins.__import__", side_effect=ImportError):
+            with patch("builtins.print") as mock_print, patch("sys.exit") as mock_exit:
+                _format_output(data, "yaml")
+                mock_print.assert_called()
+                mock_exit.assert_called_once_with(1)
+
+    def test_format_output_table_with_search_result(self):
+        """Test table output formatting with SearchResult."""
+        mock_search_result = Mock()
+        mock_search_result.to_list.return_value = [
+            {
+                "id": 1,
+                "name": "Test Company",
+                "concept_code": "TEST001",
+                "vocabulary": {"name": "SNOMED"},
+                "domain": {"name": "Condition"},
+                "concept_class": {"name": "Clinical Finding"}
+            }
+        ]
+        
+        with patch("athena_client.cli.Table") as mock_table_class:
+            mock_table = Mock()
+            mock_table_class.return_value = mock_table
+            
+            with patch("builtins.print") as mock_print:
+                _format_output(mock_search_result, "table", Mock())
+                
+                mock_table_class.assert_called_once()
+                mock_table.add_column.assert_called()
+                mock_table.add_row.assert_called()
+
+    def test_format_output_table_empty_results(self):
+        """Test table output formatting with empty results."""
+        mock_search_result = Mock()
+        mock_search_result.to_list.return_value = []
+        
+        mock_console = Mock()
+        
+        with patch("athena_client.cli.rich") as mock_rich:
+            _format_output(mock_search_result, "table", mock_console)
+            
+            # Should print "No results found" message
+            mock_console.print.assert_called_once()
+
+    def test_format_output_table_with_other_data(self):
+        """Test table output formatting with other data types."""
+        data = {"key": "value", "number": 42}
+        
+        with patch("athena_client.cli.Syntax") as mock_syntax_class:
+            mock_syntax = Mock()
+            mock_syntax_class.return_value = mock_syntax
+            
+            mock_console = Mock()
+            _format_output(data, "table", mock_console)
+            
+            mock_syntax_class.assert_called_once()
+            mock_console.print.assert_called_once_with(mock_syntax)
+
+    def test_format_output_pretty(self):
+        """Test pretty output formatting."""
+        data = {"key": "value", "number": 123}
+        mock_console = Mock()
+        
+        with patch("athena_client.cli.rich"):
+            _format_output(data, "pretty", mock_console)
+            mock_console.print.assert_called_once_with(data)
+
+    def test_format_output_fallback(self):
+        """Test fallback output formatting."""
+        data = {"key": "value", "number": 123}
+        
+        with patch("builtins.print") as mock_print:
+            _format_output(data, "unknown", None)
+            mock_print.assert_called_once_with(json.dumps(data, indent=2))
+
+    def test_cli_initialization(self):
+        """Test CLI initialization."""
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "--base-url", "https://api.example.com",
+            "--token", "test-token",
+            "--timeout", "60",
+            "--retries", "5",
+            "--output", "json",
+            "--help"  # Use help to avoid making actual API calls
+        ])
+        assert result.exit_code in (0, 2)  # Accept both success and usage error
+
+    def test_cli_initialization_no_rich(self):
+        """Test CLI initialization without rich."""
+        with patch("athena_client.cli.rich", None):
+            runner = CliRunner()
+            result = runner.invoke(cli, [
+                "--base-url", "https://api.example.com",
+                "--token", "test-token",
+                "--timeout", "60",
+                "--retries", "5",
+                "--output", "json",
+                "--help"  # Use help to avoid making actual API calls
+            ])
+            assert result.exit_code in (0, 2)  # Accept both success and usage error
+
+    @patch("athena_client.cli._create_client")
+    @patch("athena_client.cli._format_output")
+    def test_search_command(self, mock_format_output, mock_create_client):
+        """Test search command."""
+        mock_client = Mock()
+        mock_search_result = Mock()
+        mock_client.search.return_value = mock_search_result
+        mock_create_client.return_value = mock_client
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "search", "test query", "--fuzzy", "--page-size", "50", "--page", "1", "--domain", "Condition", "--vocabulary", "SNOMED"
+        ])
+        assert result.exit_code == 0
+        mock_create_client.assert_called_once()
+        mock_client.search.assert_called_once()
+        mock_format_output.assert_called_once()
+
+    @patch("athena_client.cli._create_client")
+    @patch("athena_client.cli._format_output")
+    def test_details_command(self, mock_format_output, mock_create_client):
+        """Test details command."""
+        mock_client = Mock()
+        mock_details = Mock()
+        mock_client.details.return_value = mock_details
+        mock_create_client.return_value = mock_client
+        runner = CliRunner()
+        result = runner.invoke(cli, ["details", "123"])
+        assert result.exit_code == 0
+        mock_create_client.assert_called_once()
+        mock_client.details.assert_called_once()
+        mock_format_output.assert_called_once()
+
+    @patch("athena_client.cli._create_client")
+    @patch("athena_client.cli._format_output")
+    def test_relationships_command(self, mock_format_output, mock_create_client):
+        """Test relationships command."""
+        mock_client = Mock()
+        mock_relationships = Mock()
+        mock_client.relationships.return_value = mock_relationships
+        mock_create_client.return_value = mock_client
+        runner = CliRunner()
+        result = runner.invoke(cli, ["relationships", "123", "--relationship-id", "Is a", "--only-standard"])
+        assert result.exit_code == 0
+        mock_create_client.assert_called_once()
+        mock_client.relationships.assert_called_once()
+        mock_format_output.assert_called_once()
+
+    @patch("athena_client.cli._create_client")
+    @patch("athena_client.cli._format_output")
+    def test_graph_command(self, mock_format_output, mock_create_client):
+        """Test graph command."""
+        mock_client = Mock()
+        mock_graph = Mock()
+        mock_client.graph.return_value = mock_graph
+        mock_create_client.return_value = mock_client
+        runner = CliRunner()
+        result = runner.invoke(cli, ["graph", "123", "--depth", "5", "--zoom-level", "3"])
+        assert result.exit_code == 0
+        mock_create_client.assert_called_once()
+        mock_client.graph.assert_called_once()
+        mock_format_output.assert_called_once()
+
+    @patch("athena_client.cli._create_client")
+    @patch("athena_client.cli._format_output")
+    def test_summary_command(self, mock_format_output, mock_create_client):
+        """Test summary command."""
+        mock_client = Mock()
+        mock_summary = {"details": {}, "relationships": {}, "graph": {}}
+        mock_client.summary.return_value = mock_summary
+        mock_create_client.return_value = mock_client
+        runner = CliRunner()
+        result = runner.invoke(cli, ["summary", "123"])
+        assert result.exit_code == 0
+        mock_create_client.assert_called_once()
+        mock_client.summary.assert_called_once()
+        mock_format_output.assert_called_once()
+
+    def test_click_import_error(self):
+        """Test CLI import error handling."""
+        import importlib
+        import sys
+        # Save original click import
+        original_click = sys.modules.get('click')
+        try:
+            sys.modules['click'] = None
+            import athena_client
+            import athena_client.cli
+            with pytest.raises(SystemExit):
+                importlib.reload(athena_client.cli)
+        finally:
+            if original_click is not None:
+                sys.modules['click'] = original_click
+            else:
+                del sys.modules['click']
+
+    def test_rich_import_error(self):
+        """Test ImportError handling for rich."""
+        import importlib
+        import sys
+        module_name = "athena_client.cli"
+        sys.modules.pop(module_name, None)
+        with patch.dict("sys.modules", {"rich": None}):
+            import athena_client.cli
+            importlib.reload(athena_client.cli)
+            assert athena_client.cli.rich is None
+            assert athena_client.cli.Console is None
+            assert athena_client.cli.Syntax is None
+            assert athena_client.cli.Table is None
+
+    def test_main_entrypoint(self):
+        """Test CLI main entrypoint."""
+        with patch("athena_client.cli.cli") as mock_cli:
+            from athena_client.cli import main
+            main()
+            mock_cli.assert_called_once()
+
+    def test_format_output_yaml_import_error_branch(self):
+        """Test _format_output YAML ImportError branch."""
+        data = {"key": "value"}
+        
+        # Mock the import to raise ImportError
+        with patch("builtins.__import__") as mock_import:
+            def side_effect(name, *args, **kwargs):
+                if name == "yaml":
+                    raise ImportError("No module named 'yaml'")
+                return __import__(name, *args, **kwargs)
+            mock_import.side_effect = side_effect
+            
+            with patch("builtins.print") as mock_print, patch("sys.exit") as mock_exit:
+                _format_output(data, "yaml")
+                mock_print.assert_called()
+                mock_exit.assert_called_once_with(1)
+
+    def test_format_output_table_no_rich(self):
+        """Test _format_output with table output and no rich."""
+        data = {"key": "value"}
+        with patch("athena_client.cli.rich", None):
+            from athena_client.cli import _format_output
+            with patch("builtins.print") as mock_print:
+                _format_output(data, "table", None)
+                mock_print.assert_called()
+
+    def test_format_output_pretty_no_rich(self):
+        """Test _format_output with pretty output and no rich."""
+        data = {"key": "value"}
+        with patch("athena_client.cli.rich", None):
+            from athena_client.cli import _format_output
+            with patch("builtins.print") as mock_print:
+                _format_output(data, "pretty", None)
+                mock_print.assert_called() 

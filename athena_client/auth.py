@@ -9,6 +9,10 @@ from typing import Any, Dict
 
 from .settings import get_settings
 
+from base64 import b64encode
+from datetime import datetime
+from cryptography.hazmat.primitives import hashes, serialization
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,11 +47,6 @@ def build_headers(method: str, url: str, body: bytes) -> Dict[str, str]:
     # Add HMAC signature if private key is available
     if s.ATHENA_PRIVATE_KEY:
         try:
-            from base64 import b64encode
-            from datetime import datetime
-
-            from cryptography.hazmat.primitives import hashes, serialization
-
             nonce = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
             to_sign = f"{method}\n{url}\n\n{nonce}\n{body.decode()}"
             key = serialization.load_pem_private_key(

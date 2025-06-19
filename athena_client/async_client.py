@@ -9,7 +9,7 @@ import logging
 from typing import Any, Dict, Optional, Union, cast
 from urllib.parse import urljoin
 
-import backoff
+import backoff  # type: ignore[import-not-found]
 
 try:
     import httpx
@@ -128,7 +128,7 @@ class AsyncHttpClient:
         except httpx.DecodingError as e:
             raise AthenaError(f"Invalid JSON response: {e}") from e
 
-    @backoff.on_exception(
+    @backoff.on_exception(  # type: ignore[misc]
         backoff.expo,
         (httpx.TimeoutException, httpx.ConnectError),
         max_tries=3,

@@ -75,14 +75,13 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
     elif output == "yaml":
         try:
             import yaml
+            print(yaml.dump(data))
         except ImportError:
             print(
                 "The 'pyyaml' package is required for YAML output. "
                 "Install with 'pip install \"athena-client[yaml]\"'"
             )
             sys.exit(1)
-
-        print(yaml.dump(data))
     elif output == "table" and console is not None and rich is not None:
         if hasattr(data, "to_list"):
             # Handle SearchResult

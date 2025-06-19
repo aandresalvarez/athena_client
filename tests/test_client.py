@@ -3,6 +3,8 @@ Tests for the AthenaClient class and its enhanced functionality.
 """
 
 import os
+import json
+import time
 from unittest.mock import Mock, patch
 
 import pytest
@@ -13,9 +15,22 @@ from athena_client.exceptions import (
     APIError,
     NetworkError,
     RetryFailedError,
+    AthenaError,
 )
 from athena_client.query import Q
 from athena_client.settings import get_settings
+from athena_client.models import (
+    Concept,
+    ConceptDetails,
+    ConceptRelationship,
+    ConceptRelationsGraph,
+    ConceptSearchResponse,
+    GraphLink,
+    GraphTerm,
+    RelationshipGroup,
+    RelationshipItem,
+)
+from athena_client.search_result import SearchResult
 
 
 class TestAthenaClientInitialization:
@@ -476,3 +491,813 @@ class TestAthenaFacade:
         """Test Athena facade capabilities method."""
         # Athena.capabilities() is deprecated or removed; skip this test.
         pass
+
+
+class TestAthenaClient:
+    """Test cases for the AthenaClient class."""
+
+    def test_init_with_defaults(self):
+        """Test client initialization with default values."""
+        client = AthenaClient()
+        assert client.max_retries == 3
+        assert client.retry_delay is None
+        assert client.enable_throttling is True
+
+    def test_init_with_custom_values(self):
+        """Test client initialization with custom values."""
+        client = AthenaClient(
+            base_url="https://custom.api.com",
+            token="test-token",
+            timeout=60,
+            max_retries=5,
+            retry_delay=2.0,
+            enable_throttling=False,
+        )
+        assert client.max_retries == 5
+        assert client.retry_delay == 2.0
+        assert client.enable_throttling is False
+
+    @patch("athena_client.client.HttpClient")
+    def test_search_success(self, mock_http_client_class):
+        """Test successful search."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        mock_response = {
+            "content": [
+                {
+                    "id": 1,
+                    "name": "Test Concept",
+                    "domain": "Test Domain",
+                    "vocabulary": "Test Vocab",
+                    "className": "Test Class",
+                    "code": "TEST001",
+                }
+            ],
+            "pageable": {"pageSize": 20, "pageNumber": 0},
+            "totalElements": 1,
+            "totalPages": 1,
+            "number": 0,
+            "size": 20,
+            "first": True,
+            "last": True,
+        }
+        mock_http_client.get.return_value = mock_response
+
+        client = AthenaClient()
+        result = client.search("test query")
+
+        assert isinstance(result, SearchResult)
+        mock_http_client.get.assert_called_once()
+
+    @patch("athena_client.client.HttpClient")
+    def test_search_with_query_object(self, mock_http_client_class):
+        """Test search with query object."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        mock_response = {
+            "content": [
+                {
+                    "id": 1,
+                    "name": "Test Concept",
+                    "domain": "Test Domain",
+                    "vocabulary": "Test Vocab",
+                    "className": "Test Class",
+                    "code": "TEST001",
+                }
+            ],
+            "pageable": {"pageSize": 20, "pageNumber": 0},
+            "totalElements": 1,
+            "totalPages": 1,
+            "number": 0,
+            "size": 20,
+            "first": True,
+            "last": True,
+        }
+        mock_http_client.get.return_value = mock_response
+
+        client = AthenaClient()
+        
+        # Test with query object
+        query = Q.term("test").fuzzy()
+        result = client.search(query)
+
+        assert isinstance(result, SearchResult)
+        mock_http_client.get.assert_called_once()
+
+    @patch("athena_client.client.HttpClient")
+    def test_search_api_error_page_size_too_small(self, mock_http_client_class):
+        """Test search with API error for page size too small."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        error_response = {
+            "errorMessage": "Page size must not be less than one",
+            "errorCode": "INVALID_PAGE_SIZE",
+        }
+        mock_http_client.get.return_value = error_response
+
+        client = AthenaClient()
+        
+        with pytest.raises(APIError) as exc_info:
+            client.search("test", size=0)
+        
+        assert "Search failed" in str(exc_info.value)
+        assert "Page size must not be less than one" in str(exc_info.value)
+
+    @patch("athena_client.client.HttpClient")
+    def test_search_api_error_page_size_too_large(self, mock_http_client_class):
+        """Test search with API error for page size too large."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        error_response = {
+            "errorMessage": "Page size must not be greater than 1000",
+            "errorCode": "INVALID_PAGE_SIZE",
+        }
+        mock_http_client.get.return_value = error_response
+
+        client = AthenaClient()
+        
+        with pytest.raises(APIError) as exc_info:
+            client.search("test", size=1001)
+        
+        assert "Search failed" in str(exc_info.value)
+        assert "Page size must not be greater than 1000" in str(exc_info.value)
+
+    @patch("athena_client.client.HttpClient")
+    def test_search_api_error_empty_query(self, mock_http_client_class):
+        """Test search with API error for empty query."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        error_response = {
+            "errorMessage": "Query must not be blank",
+            "errorCode": "INVALID_QUERY",
+        }
+        mock_http_client.get.return_value = error_response
+
+        client = AthenaClient()
+        
+        with pytest.raises(APIError) as exc_info:
+            client.search("")
+        
+        assert "Search failed" in str(exc_info.value)
+        assert "Query must not be blank" in str(exc_info.value)
+
+    @patch("athena_client.client.HttpClient")
+    def test_search_api_error_generic(self, mock_http_client_class):
+        """Test search with generic API error."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        error_response = {
+            "errorMessage": "Some other error",
+            "errorCode": "GENERIC_ERROR",
+        }
+        mock_http_client.get.return_value = error_response
+
+        client = AthenaClient()
+        
+        with pytest.raises(APIError) as exc_info:
+            client.search("test")
+        
+        assert "Search failed" in str(exc_info.value)
+        assert "Some other error" in str(exc_info.value)
+
+    @patch("athena_client.client.HttpClient")
+    def test_search_retry_on_network_error(self, mock_http_client_class):
+        """Test search retry on network error."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        # First call fails, second succeeds
+        mock_http_client.get.side_effect = [
+            Exception("Network error"),
+            {
+                "content": [
+                    {
+                        "id": 1,
+                        "name": "Test Concept",
+                        "domain": "Test Domain",
+                        "vocabulary": "Test Vocab",
+                        "className": "Test Class",
+                        "code": "TEST001",
+                    }
+                ],
+                "pageable": {"pageSize": 20, "pageNumber": 0},
+                "totalElements": 1,
+                "totalPages": 1,
+                "number": 0,
+                "size": 20,
+                "first": True,
+                "last": True,
+            }
+        ]
+
+        client = AthenaClient(max_retries=2, retry_delay=0.1)
+        result = client.search("test")
+
+        assert isinstance(result, SearchResult)
+        assert mock_http_client.get.call_count == 2
+
+    @patch("athena_client.client.HttpClient")
+    def test_search_retry_failed(self, mock_http_client_class):
+        """Test search retry failure."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        # All calls fail
+        mock_http_client.get.side_effect = Exception("Network error")
+
+        client = AthenaClient(max_retries=2, retry_delay=0.1)
+        
+        with pytest.raises(RetryFailedError) as exc_info:
+            client.search("test")
+        
+        assert "Search failed after 2 attempts" in str(exc_info.value)
+        assert mock_http_client.get.call_count == 2
+
+    @patch("athena_client.client.HttpClient")
+    def test_search_no_retry(self, mock_http_client_class):
+        """Test search with no retry."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        mock_http_client.get.side_effect = Exception("Network error")
+
+        client = AthenaClient()
+        
+        with pytest.raises(RetryFailedError) as exc_info:
+            client.search("test", auto_retry=False)
+        
+        assert "Search failed after 1 attempts" in str(exc_info.value)
+        assert mock_http_client.get.call_count == 1
+
+    @patch("athena_client.client.HttpClient")
+    def test_details_success(self, mock_http_client_class):
+        """Test successful concept details."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        mock_response = {
+            "id": 1,
+            "name": "Test Concept",
+            "conceptCode": "TEST001",
+            "domainId": "Test Domain",
+            "vocabularyId": "Test Vocab",
+            "conceptClassId": "Test Class",
+            "validStart": "2020-01-01",
+            "validEnd": "2020-12-31",
+        }
+        mock_http_client.get.return_value = mock_response
+
+        client = AthenaClient()
+        result = client.details(1)
+
+        assert isinstance(result, ConceptDetails)
+        assert result.id == 1
+        assert result.name == "Test Concept"
+        mock_http_client.get.assert_called_once_with("/concepts/1")
+
+    @patch("athena_client.client.HttpClient")
+    def test_details_api_error_concept_not_found(self, mock_http_client_class):
+        """Test concept details with API error for concept not found."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        error_response = {
+            "errorMessage": "Unable to find ConceptV5 with id 999",
+            "errorCode": "CONCEPT_NOT_FOUND",
+        }
+        mock_http_client.get.return_value = error_response
+
+        client = AthenaClient()
+        
+        with pytest.raises(APIError) as exc_info:
+            client.details(999)
+        
+        assert "Concept not found" in str(exc_info.value)
+        assert "Concept ID 999 does not exist" in str(exc_info.value)
+
+    @patch("athena_client.client.HttpClient")
+    def test_details_api_error_generic(self, mock_http_client_class):
+        """Test concept details with generic API error."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        error_response = {
+            "errorMessage": "Some other error",
+            "errorCode": "GENERIC_ERROR",
+        }
+        mock_http_client.get.return_value = error_response
+
+        client = AthenaClient()
+        
+        with pytest.raises(APIError) as exc_info:
+            client.details(1)
+        
+        assert "Failed to get concept details" in str(exc_info.value)
+        assert "Some other error" in str(exc_info.value)
+
+    @patch("athena_client.client.HttpClient")
+    def test_details_retry_on_network_error(self, mock_http_client_class):
+        """Test concept details retry on network error."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        # First call fails, second succeeds
+        mock_http_client.get.side_effect = [
+            Exception("Network error"),
+            {
+                "id": 1,
+                "name": "Test Concept",
+                "conceptCode": "TEST001",
+                "domainId": "Test Domain",
+                "vocabularyId": "Test Vocab",
+                "conceptClassId": "Test Class",
+                "validStart": "2020-01-01",
+                "validEnd": "2020-12-31",
+            }
+        ]
+
+        client = AthenaClient(max_retries=2, retry_delay=0.1)
+        result = client.details(1)
+
+        assert isinstance(result, ConceptDetails)
+        assert mock_http_client.get.call_count == 2
+
+    @patch("athena_client.client.HttpClient")
+    def test_details_retry_failed(self, mock_http_client_class):
+        """Test concept details retry failure."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        # All calls fail
+        mock_http_client.get.side_effect = Exception("Network error")
+
+        client = AthenaClient(max_retries=2, retry_delay=0.1)
+        
+        with pytest.raises(AthenaError) as exc_info:
+            client.details(1)
+        
+        assert "Failed to get concept details after 3 attempts" in str(exc_info.value)
+        assert mock_http_client.get.call_count == 3
+
+    @patch("athena_client.client.HttpClient")
+    def test_relationships_success(self, mock_http_client_class):
+        """Test successful concept relationships."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        mock_response = {
+            "count": 1,
+            "items": [
+                {
+                    "relationshipName": "Test Relationship",
+                    "relationships": [
+                        {
+                            "targetConceptId": 2,
+                            "targetConceptName": "Target Concept",
+                            "targetVocabularyId": "Target Vocab",
+                            "relationshipId": "REL001",
+                            "relationshipName": "Test Relationship",
+                        }
+                    ],
+                }
+            ],
+        }
+        mock_http_client.get.return_value = mock_response
+
+        client = AthenaClient()
+        result = client.relationships(1)
+
+        assert isinstance(result, ConceptRelationship)
+        assert result.count == 1
+        mock_http_client.get.assert_called_once_with("/concepts/1/relationships")
+
+    @patch("athena_client.client.HttpClient")
+    def test_relationships_api_error_concept_not_found(self, mock_http_client_class):
+        """Test relationships with API error for concept not found."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        error_response = {
+            "errorMessage": "Unable to find ConceptV5 with id 999",
+            "errorCode": "CONCEPT_NOT_FOUND",
+        }
+        mock_http_client.get.return_value = error_response
+
+        client = AthenaClient()
+        
+        with pytest.raises(APIError) as exc_info:
+            client.relationships(999)
+        
+        assert "Concept not found" in str(exc_info.value)
+        assert "Concept ID 999 does not exist" in str(exc_info.value)
+
+    @patch("athena_client.client.HttpClient")
+    def test_relationships_api_error_generic(self, mock_http_client_class):
+        """Test relationships with generic API error."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        error_response = {
+            "errorMessage": "Some other error",
+            "errorCode": "GENERIC_ERROR",
+        }
+        mock_http_client.get.return_value = error_response
+
+        client = AthenaClient()
+        
+        with pytest.raises(APIError) as exc_info:
+            client.relationships(1)
+        
+        assert "Failed to get relationships" in str(exc_info.value)
+        assert "Some other error" in str(exc_info.value)
+
+    @patch("athena_client.client.HttpClient")
+    def test_relationships_retry_on_network_error(self, mock_http_client_class):
+        """Test relationships retry on network error."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        # First call fails, second succeeds
+        mock_http_client.get.side_effect = [
+            Exception("Network error"),
+            {
+                "count": 1,
+                "items": [
+                    {
+                        "relationshipName": "Test Relationship",
+                        "relationships": [
+                            {
+                                "targetConceptId": 2,
+                                "targetConceptName": "Target Concept",
+                                "targetVocabularyId": "Target Vocab",
+                                "relationshipId": "REL001",
+                                "relationshipName": "Test Relationship",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+
+        client = AthenaClient(max_retries=2, retry_delay=0.1)
+        result = client.relationships(1)
+
+        assert isinstance(result, ConceptRelationship)
+        assert mock_http_client.get.call_count == 2
+
+    @patch("athena_client.client.HttpClient")
+    def test_relationships_retry_failed(self, mock_http_client_class):
+        """Test relationships retry failure."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        # All calls fail
+        mock_http_client.get.side_effect = Exception("Network error")
+
+        client = AthenaClient(max_retries=2, retry_delay=0.1)
+        
+        with pytest.raises(AthenaError) as exc_info:
+            client.relationships(1)
+        
+        assert "Failed to get relationships after 3 attempts" in str(exc_info.value)
+        assert mock_http_client.get.call_count == 3
+
+    @patch("athena_client.client.HttpClient")
+    def test_graph_success(self, mock_http_client_class):
+        """Test successful concept graph."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        mock_response = {
+            "terms": [
+                {
+                    "id": 1,
+                    "name": "Test Node",
+                    "weight": 1,
+                    "depth": 0,
+                    "count": 1,
+                    "isCurrent": True,
+                }
+            ],
+            "links": [
+                {
+                    "source": 1,
+                    "target": 2,
+                    "relationshipId": "REL001",
+                    "relationshipName": "Test Relationship",
+                }
+            ],
+        }
+        mock_http_client.get.return_value = mock_response
+
+        client = AthenaClient()
+        result = client.graph(1, depth=5, zoom_level=3)
+
+        assert isinstance(result, ConceptRelationsGraph)
+        assert len(result.terms) == 1
+        assert len(result.links) == 1
+        mock_http_client.get.assert_called_once_with(
+            "/concepts/1/relations", params={"depth": 5, "zoomLevel": 3}
+        )
+
+    @patch("athena_client.client.HttpClient")
+    def test_graph_retry_on_network_error(self, mock_http_client_class):
+        """Test graph retry on network error."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        # First call fails, second succeeds
+        mock_http_client.get.side_effect = [
+            Exception("Network error"),
+            {
+                "terms": [
+                    {
+                        "id": 1,
+                        "name": "Test Node",
+                        "weight": 1,
+                        "depth": 0,
+                        "count": 1,
+                        "isCurrent": True,
+                    }
+                ],
+                "links": [
+                    {
+                        "source": 1,
+                        "target": 2,
+                        "relationshipId": "REL001",
+                        "relationshipName": "Test Relationship",
+                    }
+                ],
+            }
+        ]
+
+        client = AthenaClient(max_retries=2, retry_delay=0.1)
+        result = client.graph(1)
+
+        assert isinstance(result, ConceptRelationsGraph)
+        assert mock_http_client.get.call_count == 2
+
+    @patch("athena_client.client.HttpClient")
+    def test_graph_retry_failed(self, mock_http_client_class):
+        """Test graph retry failure."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        # All calls fail
+        mock_http_client.get.side_effect = Exception("Network error")
+
+        client = AthenaClient(max_retries=2, retry_delay=0.1)
+        
+        with pytest.raises(AthenaError) as exc_info:
+            client.graph(1)
+        
+        assert "Failed to get concept graph after 3 attempts" in str(exc_info.value)
+        assert mock_http_client.get.call_count == 3
+
+    @patch("athena_client.client.HttpClient")
+    def test_summary_success(self, mock_http_client_class):
+        """Test successful concept summary."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        # Mock responses for details, relationships, and graph
+        mock_http_client.get.side_effect = [
+            {
+                "id": 1,
+                "name": "Test Concept",
+                "conceptCode": "TEST001",
+                "domainId": "Test Domain",
+                "vocabularyId": "Test Vocab",
+                "conceptClassId": "Test Class",
+                "validStart": "2020-01-01",
+                "validEnd": "2020-12-31",
+            },  # details
+            {
+                "count": 1,
+                "items": [
+                    {
+                        "relationshipName": "Test Relationship",
+                        "relationships": [
+                            {
+                                "targetConceptId": 2,
+                                "targetConceptName": "Target Concept",
+                                "targetVocabularyId": "Target Vocab",
+                                "relationshipId": "REL001",
+                                "relationshipName": "Test Relationship",
+                            }
+                        ],
+                    }
+                ],
+            },  # relationships
+            {
+                "terms": [
+                    {
+                        "id": 1,
+                        "name": "Test Node",
+                        "weight": 1,
+                        "depth": 0,
+                        "count": 1,
+                        "isCurrent": True,
+                    }
+                ],
+                "links": [
+                    {
+                        "source": 1,
+                        "target": 2,
+                        "relationshipId": "REL001",
+                        "relationshipName": "Test Relationship",
+                    }
+                ],
+            },  # graph
+        ]
+
+        client = AthenaClient()
+        result = client.summary(1)
+
+        assert isinstance(result, dict)
+        assert "details" in result
+        assert "relationships" in result
+        assert "graph" in result
+        assert mock_http_client.get.call_count == 3
+
+    @patch("athena_client.client.HttpClient")
+    def test_summary_without_relationships(self, mock_http_client_class):
+        """Test summary without relationships."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        mock_http_client.get.return_value = {
+            "id": 1,
+            "name": "Test Concept",
+            "conceptCode": "TEST001",
+            "domainId": "Test Domain",
+            "vocabularyId": "Test Vocab",
+            "conceptClassId": "Test Class",
+            "validStart": "2020-01-01",
+            "validEnd": "2020-12-31",
+        }
+
+        client = AthenaClient()
+        result = client.summary(1, include_relationships=False, include_graph=False)
+
+        assert isinstance(result, dict)
+        assert "details" in result
+        assert "relationships" not in result
+        assert "graph" not in result
+        assert mock_http_client.get.call_count == 1
+
+    @patch("athena_client.client.HttpClient")
+    def test_summary_without_graph(self, mock_http_client_class):
+        """Test summary without graph."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        # Mock responses for details and relationships only
+        mock_http_client.get.side_effect = [
+            {
+                "id": 1,
+                "name": "Test Concept",
+                "conceptCode": "TEST001",
+                "domainId": "Test Domain",
+                "vocabularyId": "Test Vocab",
+                "conceptClassId": "Test Class",
+                "validStart": "2020-01-01",
+                "validEnd": "2020-12-31",
+            },  # details
+            {
+                "count": 1,
+                "items": [
+                    {
+                        "relationshipName": "Test Relationship",
+                        "relationships": [
+                            {
+                                "targetConceptId": 2,
+                                "targetConceptName": "Target Concept",
+                                "targetVocabularyId": "Target Vocab",
+                                "relationshipId": "REL001",
+                                "relationshipName": "Test Relationship",
+                            }
+                        ],
+                    }
+                ],
+            },  # relationships
+        ]
+
+        client = AthenaClient()
+        result = client.summary(1, include_graph=False)
+
+        assert isinstance(result, dict)
+        assert "details" in result
+        assert "relationships" in result
+        assert "graph" not in result
+        assert mock_http_client.get.call_count == 2
+
+    @patch("athena_client.client.HttpClient")
+    def test_summary_retry_on_network_error(self, mock_http_client_class):
+        """Test summary retry on network error."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        # First call fails, second succeeds
+        mock_http_client.get.side_effect = [
+            Exception("Network error"),
+            {
+                "id": 1,
+                "name": "Test Concept",
+                "conceptCode": "TEST001",
+                "domainId": "Test Domain",
+                "vocabularyId": "Test Vocab",
+                "conceptClassId": "Test Class",
+                "validStart": "2020-01-01",
+                "validEnd": "2020-12-31",
+            },
+            {
+                "count": 1,
+                "items": [
+                    {
+                        "relationshipName": "Test Relationship",
+                        "relationships": [
+                            {
+                                "targetConceptId": 2,
+                                "targetConceptName": "Target Concept",
+                                "targetVocabularyId": "Target Vocab",
+                                "relationshipId": "REL001",
+                                "relationshipName": "Test Relationship",
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "terms": [
+                    {
+                        "id": 1,
+                        "name": "Test Node",
+                        "weight": 1,
+                        "depth": 0,
+                        "count": 1,
+                        "isCurrent": True,
+                    }
+                ],
+                "links": [
+                    {
+                        "source": 1,
+                        "target": 2,
+                        "relationshipId": "REL001",
+                        "relationshipName": "Test Relationship",
+                    }
+                ],
+            },
+        ]
+
+        client = AthenaClient(max_retries=2, retry_delay=0.1)
+        result = client.summary(1)
+
+        assert isinstance(result, dict)
+        assert mock_http_client.get.call_count == 4
+
+    @patch("athena_client.client.HttpClient")
+    def test_summary_retry_failed(self, mock_http_client_class):
+        """Test summary retry failure."""
+        mock_http_client = Mock()
+        mock_http_client_class.return_value = mock_http_client
+
+        # All calls fail
+        mock_http_client.get.side_effect = Exception("Network error")
+
+        client = AthenaClient(max_retries=2, retry_delay=0.1)
+        
+        # Summary method catches exceptions and returns them as error messages
+        result = client.summary(1)
+        
+        assert isinstance(result, dict)
+        assert "details" in result
+        assert "relationships" in result
+        assert "graph" in result
+        assert "error" in result["details"]
+        assert "error" in result["relationships"]
+        assert "error" in result["graph"]
+        assert "Failed to get concept details after 3 attempts" in result["details"]["error"]
+        assert "Failed to get relationships after 3 attempts" in result["relationships"]["error"]
+        assert "Failed to get concept graph after 3 attempts" in result["graph"]["error"]
+        assert mock_http_client.get.call_count == 9  # 3 calls each for details, relationships, and graph
+
+
+class TestAthena:
+    """Test cases for the Athena facade class."""
+
+    def test_athena_inheritance(self):
+        """Test that Athena inherits from AthenaClient."""
+        assert issubclass(Athena, AthenaClient)
+
+    def test_athena_instantiation(self):
+        """Test Athena instantiation."""
+        client = Athena()
+        assert isinstance(client, AthenaClient)
+        assert isinstance(client, Athena)

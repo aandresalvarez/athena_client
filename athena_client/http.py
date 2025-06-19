@@ -158,7 +158,7 @@ class HttpClient:
 
         # Add a small random delay between requests
         # This prevents overwhelming the server with rapid requests
-        delay = random.uniform(
+        delay = random.uniform(  # nosec B311
             self.throttle_delay_range[0], self.throttle_delay_range[1]
         )
         time.sleep(delay)

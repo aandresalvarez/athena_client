@@ -209,7 +209,8 @@ class AthenaClient:
                 if attempt < max_attempts - 1:
                     # For other errors, retry if we have attempts left
                     retry_history.append(e)
-                    time.sleep(retry_delay_seconds or 0)
+                    if retry_delay_seconds is not None:
+                        time.sleep(retry_delay_seconds)
 
                     # Log retry attempt
                     logger.info(
