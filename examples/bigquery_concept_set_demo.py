@@ -125,7 +125,7 @@ if __name__ == "__main__":
         print("   Please use a Python 3.9 environment for BigQuery support.")
         sys.exit(1)
     try:
-        import pybigquery
+        import sqlalchemy_bigquery
     except ImportError:
         print("❌ Missing BigQuery dependencies.")
         print('   Please install them with: pip install "athena-client[bigquery]"')
