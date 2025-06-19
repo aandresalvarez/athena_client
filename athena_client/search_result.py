@@ -1,209 +1,222 @@
 """
-SearchResult formatter for Athena search results.
+Search result wrapper for Athena API responses.
 
-This module provides a class for handling and formatting search results
-from the Athena API into various output formats.
+This module provides a wrapper around search results that provides
+convenient access to the data in various formats.
 """
 
-import json
-from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional
 
-from .exceptions import ValidationError
+import pandas as pd
+
+from .client import AthenaClient
 from .models import Concept, ConceptSearchResponse
-
-# Optional imports
-pd = None
-yaml = None
 
 
 class SearchResult:
-    """
-    Formatter for search results from the Athena API.
+    """Wrapper for search results that provides convenient access methods."""
 
-    This class provides methods to convert search results into various formats:
-    - Pydantic models (all, top)
-    - Python dictionaries (to_list)
-    - pandas DataFrames (to_df)
-    - JSON (to_json)
-    - YAML (to_yaml)
-    - CSV (to_csv)
-    """
-
-    def __init__(self, data: Dict[str, Any]) -> None:
-        """
-        Initialize with API response data.
+    def __init__(self, response: ConceptSearchResponse, client: AthenaClient) -> None:
+        """Initialize the search result wrapper.
 
         Args:
-            data: Raw API response from search endpoint
-
-        Raises:
-            ValidationError: If the data cannot be parsed
+            response: The search response from the API
+            client: The client instance for making additional requests
         """
-        try:
-            self._response = ConceptSearchResponse.model_validate(data)
-        except Exception as e:
-            raise ValidationError(f"Failed to parse search results: {e}") from e
+        self._response = response
+        self._client = client
 
     def all(self) -> List[Concept]:
-        """
-        Get all concepts as Pydantic objects.
+        """Get all concepts from the current page.
 
         Returns:
             List of Concept objects
         """
         return self._response.content
 
-    def top(self, n: int = 10) -> List[Concept]:
-        """
-        Get top N concepts as Pydantic objects.
+    def top(self, n: int) -> List[Concept]:
+        """Get the top N concepts from the current page.
 
         Args:
             n: Number of concepts to return
 
         Returns:
-            List of top N Concept objects
+            List of Concept objects
         """
         return self._response.content[:n]
 
-    def to_models(self) -> List[Concept]:
-        """
-        Alias for all().
-
-        Returns:
-            List of Concept objects
-        """
-        return self.all()
-
     def to_list(self) -> List[Dict[str, Any]]:
-        """
-        Get concepts as list of dictionaries.
+        """Convert results to a list of dictionaries.
 
         Returns:
-            List of concept dictionaries
+            List of dictionaries representing concepts
         """
-        return [concept.model_dump() for concept in self.all()]
+        return [concept.model_dump() for concept in self._response.content]
 
-    def to_df(self) -> Any:
-        """
-        Get concepts as pandas DataFrame.
+    def to_json(self) -> str:
+        """Convert results to JSON string.
 
         Returns:
-            pandas DataFrame
-
-        Raises:
-            ImportError: If pandas is not installed
+            JSON string representation of the results
         """
-        global pd
-        if pd is None:
-            try:
-                import pandas as pd_mod
+        return self._response.model_dump_json()
 
-                pd = pd_mod
-            except ImportError as err:
-                raise ImportError(
-                    "pandas is required for DataFrame output. "
-                    "Install with 'pip install \"athena-client[pandas]\"'"
-                ) from err
-
-        return pd.DataFrame(self.to_list())
-
-    def to_json(self, indent: int = 2) -> str:
-        """
-        Get concepts as JSON string.
-
-        Args:
-            indent: Indentation level
+    def to_df(self) -> pd.DataFrame:
+        """Convert results to a pandas DataFrame.
 
         Returns:
-            JSON string
+            DataFrame containing the concept data
         """
-        return json.dumps(self.to_list(), indent=indent)
+        try:
+            data = self.to_list()
+            return pd.DataFrame(data)
+        except ImportError:
+            raise ImportError(
+                "pandas is required for DataFrame output. "
+                "Install with: pip install 'athena-client[pandas]'"
+            )
 
-    def to_yaml(self) -> str:
-        """
-        Get concepts as YAML string.
+    def next_page(self) -> Optional["SearchResult"]:
+        """Get the next page of results.
 
         Returns:
-            YAML string
-
-        Raises:
-            ImportError: If PyYAML is not installed
+            SearchResult for the next page, or None if no more pages
         """
-        global yaml
-        if yaml is None:
-            try:
-                import yaml as yaml_mod
+        if self._response.last:
+            return None
 
-                yaml = yaml_mod
-            except ImportError as err:
-                raise ImportError(
-                    "PyYAML is required for YAML output. "
-                    "Install with 'pip install \"athena-client[yaml]\"'"
-                ) from err
+        # Extract query from the current response
+        # This is a simplified approach - in practice, you might want to store the original query
+        current_page = self._response.number
+        return self._client.search(
+            query="",  # This would need to be the original query
+            page=current_page + 1,
+            size=self._response.size,
+        )
 
-        return yaml.dump(self.to_list())
+    def previous_page(self) -> Optional["SearchResult"]:
+        """Get the previous page of results.
 
-    def to_csv(self, path: Union[str, Path]) -> None:
+        Returns:
+            SearchResult for the previous page, or None if no previous pages
         """
-        Write concepts to CSV file.
+        if self._response.first:
+            return None
 
-        Args:
-            path: File path to write CSV to
+        current_page = self._response.number
+        return self._client.search(
+            query="",  # This would need to be the original query
+            page=current_page - 1,
+            size=self._response.size,
+        )
 
-        Raises:
-            ImportError: If pandas is not installed
+    @property
+    def total_elements(self) -> int:
+        """Get the total number of elements across all pages.
+
+        Returns:
+            Total number of elements
         """
-        df = self.to_df()  # This will raise ImportError if pandas is missing
-        df.to_csv(path, index=False)
+        # Try to get from direct field first, then from pageable
+        if self._response.totalElements is not None:
+            return self._response.totalElements
+        
+        # Extract from pageable if available
+        pageable = self._response.pageable
+        if pageable and "totalElements" in pageable:
+            return pageable["totalElements"]
+        
+        # Fallback to number of elements in current page
+        return len(self._response.content)
+
+    @property
+    def total_pages(self) -> int:
+        """Get the total number of pages.
+
+        Returns:
+            Total number of pages
+        """
+        # Try to get from direct field first, then calculate from pageable
+        if self._response.totalPages is not None:
+            return self._response.totalPages
+        
+        # Calculate from pageable if available
+        pageable = self._response.pageable
+        if pageable and "totalElements" in pageable and "pageSize" in pageable:
+            total_elements = pageable["totalElements"]
+            page_size = pageable["pageSize"]
+            return (total_elements + page_size - 1) // page_size
+        
+        return 1
+
+    @property
+    def current_page(self) -> int:
+        """Get the current page number.
+
+        Returns:
+            Current page number
+        """
+        # Try to get from direct field first, then from pageable
+        if self._response.number is not None:
+            return self._response.number
+        
+        # Extract from pageable if available
+        pageable = self._response.pageable
+        if pageable and "pageNumber" in pageable:
+            return pageable["pageNumber"]
+        
+        return 0
+
+    @property
+    def page_size(self) -> int:
+        """Get the page size.
+
+        Returns:
+            Page size
+        """
+        # Try to get from direct field first, then from pageable
+        if self._response.size is not None:
+            return self._response.size
+        
+        # Extract from pageable if available
+        pageable = self._response.pageable
+        if pageable and "pageSize" in pageable:
+            return pageable["pageSize"]
+        
+        return len(self._response.content)
+
+    @property
+    def facets(self) -> Optional[Dict[str, Any]]:
+        """Get search facets if available.
+
+        Returns:
+            Search facets dictionary or None
+        """
+        return self._response.facets
 
     def __len__(self) -> int:
-        """
-        Get the number of results.
+        """Get the number of concepts in the current page.
 
         Returns:
             Number of concepts
         """
         return len(self._response.content)
 
-    def __getitem__(self, idx: int) -> Concept:
-        """
-        Get a specific concept by index.
+    def __getitem__(self, index: int) -> Concept:
+        """Get a concept by index.
 
         Args:
-            idx: Index of the concept
+            index: Index of the concept
 
         Returns:
-            Concept at the given index
+            Concept object
         """
-        return self._response.content[idx]
+        return self._response.content[index]
 
-    @property
-    def total(self) -> int:
-        """
-        Get the total number of results.
+    def __iter__(self):
+        """Iterate over concepts in the current page.
 
         Returns:
-            Total number of results
+            Iterator over Concept objects
         """
-        return self._response.total_elements
-
-    @property
-    def page(self) -> int:
-        """
-        Get the current page number.
-
-        Returns:
-            Current page number
-        """
-        return self._response.number
-
-    @property
-    def pages(self) -> int:
-        """
-        Get the total number of pages.
-
-        Returns:
-            Total number of pages
-        """
-        return self._response.total_pages
+        return iter(self._response.content)

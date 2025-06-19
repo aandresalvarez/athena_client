@@ -64,9 +64,9 @@ class ConceptClass(BaseModel):
 class ConceptType(str, Enum):
     """Concept standard type."""
 
-    STANDARD = "S"
-    CLASSIFICATION = "C"
-    NON_STANDARD = ""
+    STANDARD = "Standard"
+    CLASSIFICATION = "Classification"
+    NON_STANDARD = "Non-standard"
 
 
 class Concept(BaseModel):
@@ -74,19 +74,15 @@ class Concept(BaseModel):
 
     id: int = Field(..., description="Concept ID")
     name: str = Field(..., description="Concept name")
-    domain_id: str = Field(..., description="Domain ID")
-    vocabulary_id: str = Field(..., description="Vocabulary ID")
-    concept_class_id: str = Field(..., description="Concept class ID")
-    standard_concept: Optional[ConceptType] = Field(
+    domain: str = Field(..., description="Domain name")
+    vocabulary: str = Field(..., description="Vocabulary name")
+    className: str = Field(..., description="Concept class name")
+    standardConcept: Optional[ConceptType] = Field(
         None, description="Standard concept flag"
     )
-    concept_code: str = Field(..., description="Concept code")
-    invalid_reason: Optional[str] = Field(None, description="Invalid reason")
-    domain: Domain = Field(..., description="Domain object")
-    vocabulary: Vocabulary = Field(..., description="Vocabulary object")
-    concept_class: ConceptClass = Field(..., description="Concept class object")
-    valid_start_date: str = Field(..., description="Valid start date")
-    valid_end_date: str = Field(..., description="Valid end date")
+    code: str = Field(..., description="Concept code")
+    invalidReason: Optional[str] = Field(None, description="Invalid reason")
+    score: Optional[float] = Field(None, description="Search score")
 
 
 class ConceptSearchResponse(BaseModel):
@@ -94,21 +90,16 @@ class ConceptSearchResponse(BaseModel):
 
     content: List[Concept] = Field(..., description="List of concept results")
     pageable: Dict[str, Any] = Field(..., description="Pagination information")
-    total_elements: int = Field(
-        ..., description="Total number of results", alias="totalElements"
-    )
-    last: bool = Field(..., description="Whether this is the last page")
-    total_pages: int = Field(
-        ..., description="Total number of pages", alias="totalPages"
-    )
-    sort: Dict[str, Any] = Field(..., description="Sort information")
-    first: bool = Field(..., description="Whether this is the first page")
-    size: int = Field(..., description="Page size")
-    number: int = Field(..., description="Page number")
-    number_of_elements: int = Field(
-        ..., description="Number of elements in this page", alias="numberOfElements"
-    )
-    empty: bool = Field(..., description="Whether the result is empty")
+    totalElements: Optional[int] = Field(None, description="Total number of results")
+    last: Optional[bool] = Field(None, description="Whether this is the last page")
+    totalPages: Optional[int] = Field(None, description="Total number of pages")
+    sort: Optional[Dict[str, Any]] = Field(None, description="Sort information")
+    first: Optional[bool] = Field(None, description="Whether this is the first page")
+    size: Optional[int] = Field(None, description="Page size")
+    number: Optional[int] = Field(None, description="Page number")
+    numberOfElements: Optional[int] = Field(None, description="Number of elements in this page")
+    empty: Optional[bool] = Field(None, description="Whether the result is empty")
+    facets: Optional[Dict[str, Any]] = Field(None, description="Search facets")
 
 
 class ConceptDetails(BaseModel):
@@ -116,68 +107,74 @@ class ConceptDetails(BaseModel):
 
     id: int = Field(..., description="Concept ID")
     name: str = Field(..., description="Concept name")
-    domain_id: str = Field(..., description="Domain ID")
-    vocabulary_id: str = Field(..., description="Vocabulary ID")
-    concept_class_id: str = Field(..., description="Concept class ID")
-    standard_concept: Optional[ConceptType] = Field(
+    domainId: str = Field(..., description="Domain ID")
+    vocabularyId: str = Field(..., description="Vocabulary ID")
+    conceptClassId: str = Field(..., description="Concept class ID")
+    standardConcept: Optional[ConceptType] = Field(
         None, description="Standard concept flag"
     )
-    concept_code: str = Field(..., description="Concept code")
-    invalid_reason: Optional[str] = Field(None, description="Invalid reason")
-    domain: Domain = Field(..., description="Domain object")
-    vocabulary: Vocabulary = Field(..., description="Vocabulary object")
-    concept_class: ConceptClass = Field(..., description="Concept class object")
-    valid_start_date: str = Field(..., description="Valid start date")
-    valid_end_date: str = Field(..., description="Valid end date")
-    # Additional fields specific to details
+    conceptCode: str = Field(..., description="Concept code")
+    invalidReason: Optional[str] = Field(None, description="Invalid reason")
+    validStart: str = Field(..., description="Valid start date")
+    validEnd: str = Field(..., description="Valid end date")
     synonyms: Optional[List[str]] = Field(None, description="Concept synonyms")
-    additional_information: Optional[Dict[str, Any]] = Field(
-        None, description="Additional information"
-    )
+    validTerm: Optional[str] = Field(None, description="Valid term")
+    vocabularyName: Optional[str] = Field(None, description="Vocabulary name")
+    vocabularyVersion: Optional[str] = Field(None, description="Vocabulary version")
+    vocabularyReference: Optional[str] = Field(None, description="Vocabulary reference")
+    links: Optional[Dict[str, Any]] = Field(None, description="HATEOAS links", alias="_links")
 
 
 class RelationshipItem(BaseModel):
     """Information about a relationship between concepts."""
 
-    relationship_id: str = Field(..., description="Relationship ID")
-    relationship_name: str = Field(..., description="Relationship name")
-    relationship_concept_id: int = Field(..., description="Relationship concept ID")
+    targetConceptId: int = Field(..., description="Target concept ID")
+    targetConceptName: str = Field(..., description="Target concept name")
+    targetVocabularyId: str = Field(..., description="Target vocabulary ID")
+    relationshipId: str = Field(..., description="Relationship ID")
+    relationshipName: str = Field(..., description="Relationship name")
+
+
+class RelationshipGroup(BaseModel):
+    """Group of relationships with the same type."""
+
+    relationshipName: str = Field(..., description="Relationship name")
+    relationships: List[RelationshipItem] = Field(..., description="List of relationships")
 
 
 class ConceptRelationship(BaseModel):
     """Response from the /concepts/{id}/relationships endpoint."""
 
-    concept_id: int = Field(..., description="Concept ID")
-    relationships: List[RelationshipItem] = Field(
-        ..., description="List of relationships"
-    )
+    count: int = Field(..., description="Total count of relationships")
+    items: List[RelationshipGroup] = Field(..., description="List of relationship groups")
 
 
-class GraphNode(BaseModel):
-    """Node in the concept relationship graph."""
+class GraphTerm(BaseModel):
+    """Term in the concept relationship graph."""
 
-    id: int = Field(..., description="Node ID")
-    name: str = Field(..., description="Node name")
-    concept_id: int = Field(..., description="Concept ID")
-    domain_id: str = Field(..., description="Domain ID")
-    standard_concept: Optional[ConceptType] = Field(
-        None, description="Standard concept flag"
-    )
+    id: int = Field(..., description="Term ID")
+    name: str = Field(..., description="Term name")
+    weight: int = Field(..., description="Term weight")
+    depth: int = Field(..., description="Term depth")
+    count: int = Field(..., description="Term count")
+    isCurrent: bool = Field(..., description="Whether this is the current concept")
 
 
-class GraphEdge(BaseModel):
-    """Edge in the concept relationship graph."""
+class GraphLink(BaseModel):
+    """Link in the concept relationship graph."""
 
-    source: int = Field(..., description="Source node ID")
-    target: int = Field(..., description="Target node ID")
-    relationship_id: str = Field(..., description="Relationship ID")
+    source: int = Field(..., description="Source term ID")
+    target: int = Field(..., description="Target term ID")
+    relationshipId: Optional[str] = Field(None, description="Relationship ID")
+    relationshipName: Optional[str] = Field(None, description="Relationship name")
 
 
 class ConceptRelationsGraph(BaseModel):
     """Response from the /concepts/{id}/relations endpoint."""
 
-    nodes: List[GraphNode] = Field(..., description="Graph nodes")
-    edges: List[GraphEdge] = Field(..., description="Graph edges")
+    terms: List[GraphTerm] = Field(..., description="Graph terms")
+    links: List[GraphLink] = Field(..., description="Graph links")
+    connectionsCount: Optional[int] = Field(None, description="Total connections count")
 
 
 # Re-export models
@@ -190,8 +187,9 @@ __all__ = [
     "ConceptSearchResponse",
     "ConceptType",
     "Domain",
-    "GraphEdge",
-    "GraphNode",
+    "GraphLink",
+    "GraphTerm",
+    "RelationshipGroup",
     "RelationshipItem",
     "Vocabulary",
 ]

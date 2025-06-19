@@ -2,7 +2,7 @@
 Test fixtures and configuration for athena-client tests.
 """
 
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 import pytest
 
@@ -13,14 +13,17 @@ from athena_client.client import AthenaClient
 @pytest.fixture
 def mock_http_client():
     """Mock HttpClient to avoid making real API calls."""
-    with patch("athena_client.client.HttpClient") as mock:
-        yield mock
+    mock_instance = Mock()
+    with patch("athena_client.client.HttpClient", return_value=mock_instance) as mock_class:
+        # Disable retry mechanism for testing
+        mock_instance.max_retries = 0
+        yield mock_instance
 
 
 @pytest.fixture
 def athena_client(mock_http_client):
     """Get a mocked Athena client."""
-    client = AthenaClient()
+    client = AthenaClient(max_retries=0)
     return client
 
 

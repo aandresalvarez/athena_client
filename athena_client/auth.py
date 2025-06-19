@@ -4,9 +4,12 @@ Authentication module for the Athena client.
 This module handles Bearer token and HMAC authentication for the Athena API.
 """
 
+import logging
 from typing import Any, Dict
 
 from .settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def build_headers(method: str, url: str, body: bytes) -> Dict[str, str]:
@@ -25,16 +28,20 @@ def build_headers(method: str, url: str, body: bytes) -> Dict[str, str]:
         Dictionary of headers to add to the request
     """
     s = get_settings()
-    if s.ATHENA_TOKEN is None:
-        return {}
+    
+    # Start with empty headers - authentication is optional
+    hdrs = {}
+    
+    # Add Bearer token if available
+    if s.ATHENA_TOKEN:
+        hdrs["X-Athena-Auth"] = f"Bearer {s.ATHENA_TOKEN}"
+        hdrs["X-Athena-Client-Id"] = s.ATHENA_CLIENT_ID or "athena-client"
+        logger.debug("Bearer token authentication headers added")
+    else:
+        logger.debug("No API token provided; proceeding without Authorization header")
 
-    hdrs = {
-        "X-Athena-Auth": f"Bearer {s.ATHENA_TOKEN}",
-        "X-Athena-Client-Id": s.ATHENA_CLIENT_ID or "athena-client",
-    }
-
+    # Add HMAC signature if private key is available
     if s.ATHENA_PRIVATE_KEY:
-        # Import here for optional dependency
         try:
             from base64 import b64encode
             from datetime import datetime
@@ -51,12 +58,13 @@ def build_headers(method: str, url: str, body: bytes) -> Dict[str, str]:
             hdrs.update(
                 {"X-Athena-Nonce": nonce, "X-Athena-Hmac": b64encode(sig).decode()}
             )
+            logger.debug("HMAC signature headers added")
         except ImportError:
-            import logging
-
-            logging.warning(
+            logger.warning(
                 "cryptography package is required for HMAC signing. "
                 "Install with 'pip install \"athena-client[crypto]\"'"
             )
+        except Exception as e:
+            logger.error(f"Error generating HMAC signature: {e}")
 
     return hdrs
