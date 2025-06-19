@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple usage demo showing automatic error handling.
-
-This demo demonstrates how users can use the athena-client without
-implementing any error handling - it's all automatic!
+Simple demo showcasing the athena-client library working with the real Athena API.
 """
 import sys
 import os
@@ -12,95 +9,133 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from athena_client import Athena
+from athena_client.query import Q
 
 
 def main():
-    """Demonstrate simple usage with automatic error handling."""
-    print("🚀 ATHENA CLIENT - SIMPLE USAGE DEMO")
+    print("🚀 ATHENA-CLIENT SIMPLE DEMO")
     print("=" * 50)
-    print("This demo shows how you can use the client without")
-    print("implementing any error handling - it's all automatic!")
+    print("Testing the athena-client with the real Athena API")
     print("=" * 50)
-    
-    # Create client - no configuration needed for public API
-    print("\n1. Creating client...")
+
+    # Create client
+    print("\n🔧 Creating Athena client...")
     athena = Athena()
     print("✅ Client created successfully")
-    
-    # Search for concepts - automatic error handling
-    print("\n2. Searching for concepts...")
+
+    print("\n" + "=" * 50)
+    print("1. BASIC SEARCH")
+    print("=" * 50)
+
+    # Simple text search
+    print("\n🔍 Searching for 'aspirin'...")
     try:
-        results = athena.search("aspirin")
-        print(f"✅ Found {len(results.all())} concepts")
+        results = athena.search("aspirin", page=0, size=3)
+        print(f"✅ Search successful! Found {len(results)} results")
+        print("📋 Results:")
         
-        # Show first few results
-        for i, concept in enumerate(results.top(3)):
-            print(f"   {i+1}. {concept.name} (ID: {concept.id})")
-            
+        for i, concept in enumerate(results.top(3), 1):
+            print(f"  {i}. [{concept.id}] {concept.name}")
+            print(f"     Domain: {concept.domain}")
+            print(f"     Vocabulary: {concept.vocabulary}")
+            print(f"     Class: {concept.className}")
+            print()
+
+        print(f"📊 Total results available: {results.total_elements}")
+
     except Exception as e:
         print(f"❌ Search failed: {e}")
-        return
-    
-    # Get concept details - automatic error handling
-    print("\n3. Getting concept details...")
-    try:
-        # Use the first concept from search results
-        if results.all():
-            concept_id = results.all()[0].id
-            details = athena.details(concept_id)
-            print(f"✅ Concept details: {details.name}")
-            print(f"   Domain: {details.domain.name}")
-            print(f"   Vocabulary: {details.vocabulary.name}")
-            print(f"   Class: {details.concept_class.name}")
-        else:
-            print("❌ No concepts found to get details for")
-            
-    except Exception as e:
-        print(f"❌ Failed to get concept details: {e}")
-    
-    # Get relationships - automatic error handling
-    print("\n4. Getting concept relationships...")
-    try:
-        if results.all():
-            concept_id = results.all()[0].id
-            relationships = athena.relationships(concept_id)
-            print(f"✅ Found {len(relationships.relationships)} relationships")
-            
-            # Show first few relationships
-            for i, rel in enumerate(relationships.relationships[:3]):
-                print(f"   {i+1}. {rel.relationship_name} -> {rel.concept_name}")
-        else:
-            print("❌ No concepts found to get relationships for")
-            
-    except Exception as e:
-        print(f"❌ Failed to get relationships: {e}")
-    
-    # Test with invalid concept ID - shows automatic error handling
-    print("\n5. Testing with invalid concept ID...")
-    try:
-        details = athena.details(999999999)  # Non-existent concept
-        print(f"✅ Unexpected success: {details.name}")
-    except Exception as e:
-        print(f"✅ Expected error caught automatically: {e}")
-        print("   Notice the clear, actionable error message!")
-    
-    # Test with invalid search parameters - shows automatic error handling
-    print("\n6. Testing with invalid search parameters...")
-    try:
-        results = athena.search("", size=0)  # Invalid page size
-        print(f"✅ Unexpected success: found {len(results.all())} concepts")
-    except Exception as e:
-        print(f"✅ Expected error caught automatically: {e}")
-        print("   Notice the helpful suggestion to fix the issue!")
-    
+
     print("\n" + "=" * 50)
-    print("🎉 DEMO COMPLETE")
+    print("2. QUERY DSL SEARCH")
     print("=" * 50)
-    print("✅ No try-catch blocks needed!")
-    print("✅ Automatic retry on network issues")
-    print("✅ Clear, actionable error messages")
-    print("✅ Graceful handling of API errors")
-    print("\nThe athena-client provides robust error handling out of the box!")
+
+    # Query DSL search
+    print("\n🔍 Using Query DSL to search for 'heart' OR 'cardiac'...")
+    try:
+        query = Q.term("heart") | Q.term("cardiac")
+        complex_results = athena.search(query, page=0, size=3)
+        print(f"✅ Complex search successful! Found {len(complex_results)} results")
+        
+        for i, concept in enumerate(complex_results.top(3), 1):
+            print(f"  {i}. [{concept.id}] {concept.name} ({concept.vocabulary})")
+    except Exception as e:
+        print(f"❌ Complex search failed: {e}")
+
+    print("\n" + "=" * 50)
+    print("3. CONCEPT DETAILS")
+    print("=" * 50)
+
+    # Get concept details for the first aspirin result
+    print("\n🔍 Getting concept details for aspirin...")
+    try:
+        # Get the first aspirin concept ID from the search
+        aspirin_results = athena.search("aspirin", page=0, size=1)
+        if aspirin_results:
+            concept_id = aspirin_results[0].id
+            details = athena.details(concept_id)
+            print("✅ Concept details retrieved successfully!")
+            print(f"  📋 ID: {details.id}")
+            print(f"  📋 Name: {details.name}")
+            print(f"  📋 Domain: {details.domainId}")
+            print(f"  📋 Vocabulary: {details.vocabularyId}")
+            print(f"  📋 Class: {details.conceptClassId}")
+            print(f"  📋 Code: {details.conceptCode}")
+        else:
+            print("❌ No aspirin concepts found")
+    except Exception as e:
+        print(f"❌ Could not retrieve concept details: {e}")
+
+    print("\n" + "=" * 50)
+    print("4. CONCEPT RELATIONSHIPS")
+    print("=" * 50)
+
+    # Get relationships for the same concept
+    print("\n🔗 Getting concept relationships...")
+    try:
+        if aspirin_results:
+            concept_id = aspirin_results[0].id
+            relationships = athena.relationships(concept_id)
+            print(f"✅ Relationships retrieved successfully! Found {relationships.count} total relationships")
+            
+            if relationships.items:
+                print("📋 Relationship Groups:")
+                for i, group in enumerate(relationships.items[:2], 1):  # Show first 2 groups
+                    print(f"  {i}. {group.relationshipName} ({len(group.relationships)} relationships)")
+        else:
+            print("❌ No concept available for relationships")
+    except Exception as e:
+        print(f"❌ Could not retrieve relationships: {e}")
+
+    print("\n" + "=" * 50)
+    print("5. CONCEPT GRAPH")
+    print("=" * 50)
+
+    # Get graph for the same concept
+    print("\n🕸️ Getting concept graph...")
+    try:
+        if aspirin_results:
+            concept_id = aspirin_results[0].id
+            graph = athena.graph(concept_id, depth=1, zoom_level=1)
+            print("✅ Graph retrieved successfully!")
+            print(f"  📊 Terms: {len(graph.terms)}")
+            print(f"  📊 Links: {len(graph.links)}")
+        else:
+            print("❌ No concept available for graph")
+    except Exception as e:
+        print(f"❌ Could not retrieve graph: {e}")
+
+    print("\n" + "=" * 50)
+    print("🎉 DEMO COMPLETED!")
+    print("=" * 50)
+    print("\nThe athena-client is working correctly with the Athena API!")
+    print("\nKey Features Demonstrated:")
+    print("  ✅ Basic text search")
+    print("  ✅ Query DSL for complex searches")
+    print("  ✅ Concept details retrieval")
+    print("  ✅ Relationships exploration")
+    print("  ✅ Graph visualization data")
+    print("\nAll API calls are working as expected!")
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Union, cast
 
 import orjson
 from pydantic import BaseModel as PydanticBaseModel
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 
 def _json_dumps(value: Any, *, default: Any) -> str:
@@ -119,7 +119,7 @@ class ConceptDetails(BaseModel):
     invalidReason: Optional[str] = Field(None, description="Invalid reason")
     validStart: str = Field(..., description="Valid start date")
     validEnd: str = Field(..., description="Valid end date")
-    synonyms: Optional[List[str]] = Field(None, description="Concept synonyms")
+    synonyms: Optional[List[Union[str, dict]]] = Field(None, description="Concept synonyms")
     validTerm: Optional[str] = Field(None, description="Valid term")
     vocabularyName: Optional[str] = Field(None, description="Vocabulary name")
     vocabularyVersion: Optional[str] = Field(None, description="Vocabulary version")
@@ -127,6 +127,26 @@ class ConceptDetails(BaseModel):
     links: Optional[Dict[str, Any]] = Field(
         None, description="HATEOAS links", alias="_links"
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_synonyms(cls, values):
+        synonyms = values.get("synonyms")
+        if synonyms and isinstance(synonyms, list):
+            normalized = []
+            for item in synonyms:
+                if isinstance(item, str):
+                    normalized.append(item)
+                elif isinstance(item, dict):
+                    # Use 'synonymName' if present, else join all string values
+                    if "synonymName" in item:
+                        normalized.append(item["synonymName"])
+                    else:
+                        # Fallback: join all string values in the dict
+                        str_values = [str(v) for v in item.values() if isinstance(v, str)]
+                        normalized.append(", ".join(str_values))
+            values["synonyms"] = normalized
+        return values
 
 
 class RelationshipItem(BaseModel):

@@ -231,3 +231,24 @@ class Q:
             query_dict["fuzziness"] = self.options["fuzzy"]
 
         return {"filter": {"query_string": query_dict}}
+
+    def __str__(self) -> str:
+        """
+        Convert the query to a string representation for API calls.
+
+        Returns:
+            String representation of the query
+        """
+        if self.query_type == "compound":
+            if self.operator == "AND":
+                assert self.left is not None and self.right is not None
+                return f"({self.left}) AND ({self.right})"
+            elif self.operator == "OR":
+                assert self.left is not None and self.right is not None
+                return f"({self.left}) OR ({self.right})"
+            elif self.operator == "NOT":
+                assert self.right is not None
+                return f"NOT ({self.right})"
+        else:
+            # For basic query types, return the value
+            return self.value

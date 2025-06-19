@@ -205,7 +205,22 @@ class HttpClient:
         Returns:
             Full URL
         """
-        full_url = urljoin(self.base_url, path)
+        # Handle paths that start with / to ensure they're appended correctly
+        if path.startswith('/'):
+            # Remove the leading / and join with base_url
+            path = path[1:]
+        
+        # Ensure base_url doesn't end with / and path doesn't start with /
+        if self.base_url.endswith('/'):
+            base = self.base_url[:-1]
+        else:
+            base = self.base_url
+            
+        if path.startswith('/'):
+            path = path[1:]
+            
+        full_url = f"{base}/{path}"
+        
         logger.debug(
             f"Building URL: base_url='{self.base_url}', path='{path}' "
             f"-> full_url='{full_url}'"
