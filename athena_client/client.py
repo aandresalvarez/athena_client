@@ -5,6 +5,7 @@ This module provides the main client class for interacting with the Athena API.
 """
 
 import logging
+import time
 from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 from .exceptions import APIError, AthenaError
@@ -175,6 +176,7 @@ class AthenaClient:
                 "update_interval": settings.ATHENA_PROGRESS_UPDATE_INTERVAL,
             }
 
+        retry_history: list[Exception] = []
         with progress_context(**progress_kwargs) if progress_kwargs else nullcontext():
             for attempt in range(max_attempts):
                 try:
@@ -253,17 +255,21 @@ class AthenaClient:
 
                     # For network errors, retry if we have attempts left
                     if attempt < max_attempts - 1:
-                        # For other errors, retry if we have attempts left
                         logger.info(
                             f"Retrying search due to {type(e).__name__} "
                             f"(attempt {attempt + 1}/{max_attempts}): {e}"
                         )
+                        if retry_delay is not None:
+                            time.sleep(retry_delay)
+                        elif self.retry_delay is not None:
+                            time.sleep(self.retry_delay)
+                        retry_history.append(e)
                         continue
                     else:
                         # Final attempt failed, raise with retry history
                         raise RetryFailedError(
                             f"Search failed after {max_attempts} attempts",
-                            retry_history=[],
+                            retry_history=retry_history,
                             max_attempts=max_attempts,
                             last_error=e,
                         ) from e
