@@ -1329,3 +1329,29 @@ class TestAthena:
         client = Athena()
         assert isinstance(client, AthenaClient)
         assert isinstance(client, Athena)
+
+
+class TestDatabaseIntegration:
+    """Tests for database connector integration in AthenaClient."""
+
+    def test_set_database_connector(self):
+        client = AthenaClient()
+        connector = Mock()
+        client.set_database_connector(connector)
+        assert client._db_connector is connector
+
+    def test_validate_local_concepts_calls_connector(self):
+        client = AthenaClient()
+        connector = Mock()
+        connector.validate_concepts.return_value = [1]
+        client.set_database_connector(connector)
+
+        result = client.validate_local_concepts([1])
+
+        connector.validate_concepts.assert_called_once_with([1])
+        assert result == [1]
+
+    def test_validate_local_concepts_without_connector(self):
+        client = AthenaClient()
+        with pytest.raises(RuntimeError):
+            client.validate_local_concepts([1])

@@ -6,8 +6,9 @@ This module provides the main client class for interacting with the Athena API.
 
 import logging
 import time
-from typing import Any, Dict, Literal, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
+from .db.base import DatabaseConnector
 from .exceptions import APIError, AthenaError
 from .http import HttpClient
 from .models import (
@@ -35,6 +36,7 @@ class AthenaClient:
         retry_delay: Optional[float] = None,
         enable_throttling: bool = True,
         throttle_delay_range: Tuple[float, float] = (0.1, 0.3),
+        db_connector: Optional[DatabaseConnector] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Athena client.
@@ -50,6 +52,7 @@ class AthenaClient:
                 to the server
             throttle_delay_range: Range of delays for throttling (min, max)
                 in seconds
+            db_connector: Optional database connector for local OMOP validation
             **kwargs: Additional settings
         """
         s = get_settings()
@@ -59,6 +62,7 @@ class AthenaClient:
         self.retry_delay = retry_delay
         self.enable_throttling = enable_throttling
         self.throttle_delay_range = throttle_delay_range
+        self._db_connector = db_connector
 
         # Create HTTP client with enhanced configuration
         self.http = HttpClient(
@@ -77,6 +81,22 @@ class AthenaClient:
             f"retry_delay={self.retry_delay}, "
             f"throttling={'enabled' if self.enable_throttling else 'disabled'}"
         )
+
+    def set_database_connector(self, connector: DatabaseConnector) -> None:
+        """Set the database connector for this client."""
+
+        self._db_connector = connector
+
+    def validate_local_concepts(self, concept_ids: List[int]) -> List[int]:
+        """Validate concept IDs against the configured local database."""
+
+        if not self._db_connector:
+            raise RuntimeError(
+                "A database connector has not been configured. Use "
+                "`set_database_connector()` to provide one."
+            )
+
+        return self._db_connector.validate_concepts(concept_ids)
 
     def search(
         self,
