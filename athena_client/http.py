@@ -10,7 +10,6 @@ import logging
 import random
 import time
 from typing import Any, Dict, Optional, Tuple, TypeVar, Union
-from urllib.parse import urljoin
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -206,21 +205,21 @@ class HttpClient:
             Full URL
         """
         # Handle paths that start with / to ensure they're appended correctly
-        if path.startswith('/'):
+        if path.startswith("/"):
             # Remove the leading / and join with base_url
             path = path[1:]
-        
+
         # Ensure base_url doesn't end with / and path doesn't start with /
-        if self.base_url.endswith('/'):
+        if self.base_url.endswith("/"):
             base = self.base_url[:-1]
         else:
             base = self.base_url
-            
-        if path.startswith('/'):
+
+        if path.startswith("/"):
             path = path[1:]
-            
+
         full_url = f"{base}/{path}"
-        
+
         logger.debug(
             f"Building URL: base_url='{self.base_url}', path='{path}' "
             f"-> full_url='{full_url}'"

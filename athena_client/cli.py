@@ -75,6 +75,7 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
     elif output == "yaml":
         try:
             import yaml
+
             print(yaml.dump(data))
         except ImportError:
             print(
@@ -105,10 +106,10 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
                 table.add_row(
                     str(item["id"]),
                     item["name"],
-                    item["concept_code"],
-                    item["vocabulary"]["name"],
-                    item["domain"]["name"],
-                    item["concept_class"]["name"],
+                    item["code"],
+                    item["vocabulary"],
+                    item["domain"],
+                    item["className"],
                 )
 
             console.print(table)

@@ -68,47 +68,57 @@ The concept exploration functionality helps bridge the gap between user queries 
 ### Basic Concept Exploration
 
 ```python
+import asyncio
 from athena_client import Athena, create_concept_explorer
+from athena_client.async_client import AthenaAsyncClient
 
-# Create client and explorer
-athena = Athena()
-explorer = create_concept_explorer(athena)
+# Create async client and explorer (recommended for best performance)
+client = AthenaAsyncClient()
+explorer = create_concept_explorer(client)
 
-# Find standard concepts through exploration
-results = explorer.find_standard_concepts(
-    query="headache",
-    max_exploration_depth=2,
-    include_synonyms=True,
-    include_relationships=True,
-    vocabulary_priority=['SNOMED', 'RxNorm', 'ICD10']
-)
+async def explore_concepts():
+    # Find standard concepts through exploration
+    results = await explorer.find_standard_concepts(
+        query="headache",
+        max_exploration_depth=2,
+        initial_seed_limit=10,  # Control exploration scope
+        include_synonyms=True,
+        include_relationships=True,
+        vocabulary_priority=['SNOMED', 'RxNorm', 'ICD10']
+    )
 
-print(f"Direct matches: {len(results['direct_matches'])}")
-print(f"Synonym matches: {len(results['synonym_matches'])}")
-print(f"Relationship matches: {len(results['relationship_matches'])}")
-print(f"Cross-references: {len(results['cross_references'])}")
+    print(f"Direct matches: {len(results['direct_matches'])}")
+    print(f"Synonym matches: {len(results['synonym_matches'])}")
+    print(f"Relationship matches: {len(results['relationship_matches'])}")
+    print(f"Cross-references: {len(results['cross_references'])}")
+
+# Run the async function
+asyncio.run(explore_concepts())
 ```
 
 ### Mapping to Standard Concepts with Confidence Scores
 
 ```python
-# Map a query to standard concepts with confidence scoring
-mappings = explorer.map_to_standard_concepts(
-    query="migraine",
-    target_vocabularies=['SNOMED', 'RxNorm'],
-    confidence_threshold=0.5
-)
+async def map_concepts():
+    # Map a query to standard concepts with confidence scoring
+    mappings = await explorer.map_to_standard_concepts(
+        query="migraine",
+        target_vocabularies=['SNOMED', 'RxNorm'],
+        confidence_threshold=0.5
+    )
 
-for mapping in mappings:
-    concept = mapping['concept']
-    confidence = mapping['confidence']
-    path = mapping['exploration_path']
-    
-    print(f"Concept: {concept.name}")
-    print(f"Vocabulary: {concept.vocabulary}")
-    print(f"Confidence: {confidence:.2f}")
-    print(f"Discovery path: {path}")
-    print()
+    for mapping in mappings:
+        concept = mapping['concept']
+        confidence = mapping['confidence']
+        path = mapping['exploration_path']
+        
+        print(f"Concept: {concept.name}")
+        print(f"Vocabulary: {concept.vocabulary}")
+        print(f"Confidence: {confidence:.2f}")
+        print(f"Discovery path: {path}")
+        print()
+
+asyncio.run(map_concepts())
 ```
 
 ### Alternative Query Suggestions
@@ -158,12 +168,19 @@ for parent in hierarchy['parents'][:3]:
 Here's a complete workflow for finding standard concepts:
 
 ```python
-def find_standard_concepts_workflow(query):
+import asyncio
+from athena_client.async_client import AthenaAsyncClient
+from athena_client import create_concept_explorer
+
+async def find_standard_concepts_workflow(query):
     """Comprehensive workflow for finding standard concepts."""
     
+    client = AthenaAsyncClient()
+    explorer = create_concept_explorer(client)
+    
     # Step 1: Try direct search first
-    direct_results = athena.search(query, size=10)
-    direct_standard = [c for c in direct_results.all() if c.standardConcept == "Standard"]
+    direct_results = client.search_concepts(query, page_size=10)
+    direct_standard = [c for c in direct_results['content'] if c.standardConcept == "Standard"]
     
     if direct_standard:
         print(f"✅ Found {len(direct_standard)} standard concepts directly")
@@ -171,15 +188,16 @@ def find_standard_concepts_workflow(query):
     
     # Step 2: Use concept exploration
     print("🔍 Exploring for standard concepts...")
-    exploration_results = explorer.find_standard_concepts(
+    exploration_results = await explorer.find_standard_concepts(
         query=query,
         max_exploration_depth=3,
+        initial_seed_limit=10,
         include_synonyms=True,
         include_relationships=True
     )
     
     # Step 3: Get high-confidence mappings
-    mappings = explorer.map_to_standard_concepts(
+    mappings = await explorer.map_to_standard_concepts(
         query=query,
         confidence_threshold=0.4
     )
@@ -193,8 +211,8 @@ def find_standard_concepts_workflow(query):
     suggestions = explorer.suggest_alternative_queries(query, max_suggestions=5)
     
     for suggestion in suggestions:
-        test_results = athena.search(suggestion, size=5)
-        standard_found = [c for c in test_results.all() if c.standardConcept == "Standard"]
+        test_results = client.search_concepts(suggestion, page_size=5)
+        standard_found = [c for c in test_results['content'] if c.standardConcept == "Standard"]
         if standard_found:
             print(f"✅ Found standard concepts with suggestion: '{suggestion}'")
             return standard_found
@@ -203,7 +221,11 @@ def find_standard_concepts_workflow(query):
     return []
 
 # Use the workflow
-standard_concepts = find_standard_concepts_workflow("myocardial infarction")
+async def main():
+    standard_concepts = await find_standard_concepts_workflow("myocardial infarction")
+    print(f"Found {len(standard_concepts)} standard concepts")
+
+asyncio.run(main())
 ```
 
 ### Advanced Configuration
@@ -211,74 +233,114 @@ standard_concepts = find_standard_concepts_workflow("myocardial infarction")
 Configure exploration behavior for your specific needs:
 
 ```python
-# Create explorer with custom configuration
-explorer = ConceptExplorer(athena)
+import asyncio
+from athena_client.async_client import AthenaAsyncClient
+from athena_client import create_concept_explorer
 
-# Comprehensive exploration with all features
-results = explorer.find_standard_concepts(
-    query="diabetes",
-    max_exploration_depth=3,        # How deep to explore relationships
-    include_synonyms=True,          # Explore synonyms
-    include_relationships=True,     # Explore relationships
-    vocabulary_priority=[           # Preferred vocabularies
-        'SNOMED', 
-        'RxNorm', 
-        'ICD10', 
-        'LOINC'
-    ]
-)
+async def advanced_exploration():
+    # Create async client and explorer
+    client = AthenaAsyncClient()
+    explorer = create_concept_explorer(client)
 
-# High-confidence mapping with specific vocabularies
-mappings = explorer.map_to_standard_concepts(
-    query="hypertension",
-    target_vocabularies=['SNOMED', 'ICD10'],  # Only these vocabularies
-    confidence_threshold=0.7                  # High confidence threshold
-)
+    # Comprehensive exploration with all features
+    results = await explorer.find_standard_concepts(
+        query="diabetes",
+        max_exploration_depth=3,        # How deep to explore relationships
+        initial_seed_limit=15,          # Number of seed concepts to explore
+        include_synonyms=True,          # Explore synonyms
+        include_relationships=True,     # Explore relationships
+        vocabulary_priority=[           # Preferred vocabularies
+            'SNOMED', 
+            'RxNorm', 
+            'ICD10', 
+            'LOINC'
+        ]
+    )
+
+    # High-confidence mapping with specific vocabularies
+    mappings = await explorer.map_to_standard_concepts(
+        query="hypertension",
+        target_vocabularies=['SNOMED', 'ICD10'],  # Only these vocabularies
+        confidence_threshold=0.7                  # High confidence threshold
+    )
+
+asyncio.run(advanced_exploration())
 ```
 
 ### Use Cases
 
 #### 1. Clinical Decision Support
 ```python
-# Find standard concepts for clinical conditions
-conditions = ["chest pain", "shortness of breath", "fever"]
-standard_concepts = {}
+import asyncio
+from athena_client.async_client import AthenaAsyncClient
+from athena_client import create_concept_explorer
 
-for condition in conditions:
-    mappings = explorer.map_to_standard_concepts(
-        condition, 
-        target_vocabularies=['SNOMED'],
-        confidence_threshold=0.6
-    )
-    if mappings:
-        standard_concepts[condition] = mappings[0]['concept']
+async def clinical_decision_support():
+    client = AthenaAsyncClient()
+    explorer = create_concept_explorer(client)
+    
+    # Find standard concepts for clinical conditions
+    conditions = ["chest pain", "shortness of breath", "fever"]
+    standard_concepts = {}
+
+    for condition in conditions:
+        mappings = await explorer.map_to_standard_concepts(
+            condition, 
+            target_vocabularies=['SNOMED'],
+            confidence_threshold=0.6
+        )
+        if mappings:
+            standard_concepts[condition] = mappings[0]['concept']
+    
+    return standard_concepts
+
+asyncio.run(clinical_decision_support())
 ```
 
 #### 2. Medication Mapping
 ```python
-# Map medication names to standard drug concepts
-medications = ["aspirin", "ibuprofen", "acetaminophen"]
-drug_concepts = {}
+async def medication_mapping():
+    client = AthenaAsyncClient()
+    explorer = create_concept_explorer(client)
+    
+    # Map medication names to standard drug concepts
+    medications = ["aspirin", "ibuprofen", "acetaminophen"]
+    drug_concepts = {}
 
-for med in medications:
-    mappings = explorer.map_to_standard_concepts(
-        med,
-        target_vocabularies=['RxNorm'],
-        confidence_threshold=0.5
-    )
-    if mappings:
-        drug_concepts[med] = mappings[0]['concept']
+    for med in medications:
+        mappings = await explorer.map_to_standard_concepts(
+            med,
+            target_vocabularies=['RxNorm'],
+            confidence_threshold=0.5
+        )
+        if mappings:
+            drug_concepts[med] = mappings[0]['concept']
+    
+    return drug_concepts
+
+asyncio.run(medication_mapping())
 ```
 
 #### 3. Cross-Vocabulary Mapping
 ```python
-# Map between different coding systems
-icd10_concept = athena.search("diabetes", vocabulary="ICD10")[0]
-snomed_mappings = explorer.map_to_standard_concepts(
-    icd10_concept.name,
-    target_vocabularies=['SNOMED'],
-    confidence_threshold=0.7
-)
+async def cross_vocabulary_mapping():
+    client = AthenaAsyncClient()
+    explorer = create_concept_explorer(client)
+    
+    # Map between different coding systems
+    icd10_results = client.search_concepts("diabetes", vocabulary="ICD10")
+    if icd10_results['content']:
+        icd10_concept = icd10_results['content'][0]
+        snomed_mappings = await explorer.map_to_standard_concepts(
+            icd10_concept.name,
+            target_vocabularies=['SNOMED'],
+            confidence_threshold=0.7
+        )
+        return snomed_mappings
+    
+    return []
+
+asyncio.run(cross_vocabulary_mapping())
 ```
 
 ### Best Practices
@@ -302,13 +364,24 @@ snomed_mappings = explorer.map_to_standard_concepts(
 The concept exploration functionality includes robust error handling:
 
 ```python
-try:
-    mappings = explorer.map_to_standard_concepts("diabetes")
-    print(f"Found {len(mappings)} mappings")
-except Exception as e:
-    print(f"Exploration failed: {e}")
-    # Fall back to direct search
-    results = athena.search("diabetes")
+import asyncio
+from athena_client.async_client import AthenaAsyncClient
+from athena_client import create_concept_explorer
+
+async def robust_exploration():
+    client = AthenaAsyncClient()
+    explorer = create_concept_explorer(client)
+    
+    try:
+        mappings = await explorer.map_to_standard_concepts("diabetes")
+        print(f"Found {len(mappings)} mappings")
+    except Exception as e:
+        print(f"Exploration failed: {e}")
+        # Fall back to direct search
+        results = client.search_concepts("diabetes")
+        print(f"Direct search found {len(results['content'])} concepts")
+
+asyncio.run(robust_exploration())
 ```
 
 This concept exploration functionality helps ensure you can find the standard medical concepts you need, even when they don't appear directly in search results.

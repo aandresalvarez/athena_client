@@ -5,7 +5,7 @@ This module provides the main client class for interacting with the Athena API.
 """
 
 import logging
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 from .exceptions import APIError, AthenaError
 from .http import HttpClient
@@ -109,16 +109,15 @@ class AthenaClient:
             Network errors are automatically retried, and API errors provide
             clear, actionable messages without requiring try-catch blocks.
         """
-        import time
 
         from .exceptions import RetryFailedError
+        from .settings import get_settings
         from .utils import (
             estimate_query_size,
-            get_operation_timeout,
             format_large_query_warning,
+            get_operation_timeout,
             progress_context,
         )
-        from .settings import get_settings
 
         settings = get_settings()
 
@@ -134,7 +133,7 @@ class AthenaClient:
             print(warning)
 
         # Use settings default page size if not specified
-        if size == 20 and 'pageSize' not in kwargs:
+        if size == 20 and "pageSize" not in kwargs:
             size = settings.ATHENA_DEFAULT_PAGE_SIZE
 
         # Validate page size
@@ -162,30 +161,18 @@ class AthenaClient:
             if max_retries is not None
             else (self.max_retries if auto_retry else 1),
         )
-        retry_delay_seconds = (
-            retry_delay if retry_delay is not None else self.retry_delay
-        )
 
         # Get appropriate timeout for this operation
-        operation_timeout = get_operation_timeout('search', estimated_size)
-        
-        # Determine if we should show progress
-        should_show_progress = (
-            show_progress if show_progress is not None 
-            else settings.ATHENA_SHOW_PROGRESS
-        )
+        operation_timeout = get_operation_timeout("search", estimated_size)
 
-        # Track retry history for detailed error reporting
-        retry_history = []
-
-        # Use progress context for large queries
-        progress_kwargs = {}
-        if should_show_progress and estimated_size > settings.ATHENA_LARGE_QUERY_THRESHOLD:
+        # Set up progress tracking if enabled
+        progress_kwargs: Optional[Dict[str, Any]] = None
+        if show_progress:
             progress_kwargs = {
-                'total': min(estimated_size, page_size),
-                'description': f"Searching for '{query_str[:30]}{'...' if len(query_str) > 30 else ''}'",
-                'show_progress': True,
-                'update_interval': settings.ATHENA_PROGRESS_UPDATE_INTERVAL,
+                "total": estimated_size,
+                "description": f"Searching for '{query_str}'",
+                "show_progress": show_progress,
+                "update_interval": settings.ATHENA_PROGRESS_UPDATE_INTERVAL,
             }
 
         with progress_context(**progress_kwargs) if progress_kwargs else nullcontext():
@@ -194,7 +181,7 @@ class AthenaClient:
                     # Create a temporary HTTP client with the appropriate timeout
                     temp_http = HttpClient(
                         base_url=self.http.base_url,
-                        token=self.http.session.headers.get('Authorization'),
+                        token=str(self.http.session.headers.get("Authorization", "")),
                         timeout=operation_timeout,
                         max_retries=1,  # We handle retries manually
                         enable_throttling=self.http.enable_throttling,
@@ -203,7 +190,8 @@ class AthenaClient:
 
                     response = temp_http.get("/concepts", params=params)
 
-                    # Raise APIError for any error response with errorMessage and errorCode
+                    # Raise APIError for any error response with errorMessage
+                    # and errorCode
                     if (
                         isinstance(response, dict)
                         and response.get("result") is None
@@ -212,11 +200,12 @@ class AthenaClient:
                     ):
                         error_msg = response.get("errorMessage", "Unknown API error")
                         error_code = response.get("errorCode")
-                        
+
                         # Enhanced error messages for large queries
                         if "timeout" in error_msg.lower():
                             raise APIError(
-                                f"Search timeout: The query '{query_str}' is taking too long to process. "
+                                f"Search timeout: The query '{query_str}' "
+                                f"is taking too long to process. "
                                 f"Try:\n"
                                 f"• Using more specific search terms\n"
                                 f"• Adding domain or vocabulary filters\n"
@@ -235,7 +224,8 @@ class AthenaClient:
                         elif "Page size must not be greater than" in error_msg:
                             raise APIError(
                                 f"Page size too large: {error_msg}. "
-                                f"Please reduce the page size to {settings.ATHENA_MAX_PAGE_SIZE} or less.",
+                                f"Please reduce the page size to "
+                                f"{settings.ATHENA_MAX_PAGE_SIZE} or less.",
                                 api_error_code=error_code,
                                 api_message=error_msg,
                             )
@@ -264,11 +254,6 @@ class AthenaClient:
                     # For network errors, retry if we have attempts left
                     if attempt < max_attempts - 1:
                         # For other errors, retry if we have attempts left
-                        retry_history.append(e)
-                        if retry_delay_seconds is not None:
-                            time.sleep(retry_delay_seconds)
-
-                        # Log retry attempt
                         logger.info(
                             f"Retrying search due to {type(e).__name__} "
                             f"(attempt {attempt + 1}/{max_attempts}): {e}"
@@ -278,7 +263,7 @@ class AthenaClient:
                         # Final attempt failed, raise with retry history
                         raise RetryFailedError(
                             f"Search failed after {max_attempts} attempts",
-                            retry_history=retry_history,
+                            retry_history=[],
                             max_attempts=max_attempts,
                             last_error=e,
                         ) from e
@@ -462,18 +447,21 @@ class AthenaClient:
             Network errors are automatically retried, and API errors provide
             clear, actionable messages without requiring try-catch blocks.
         """
-        from .utils import get_operation_timeout, progress_context
         from .settings import get_settings
+        from .utils import get_operation_timeout, progress_context
 
         settings = get_settings()
 
         # Estimate graph complexity based on depth and zoom level
         estimated_complexity = depth * zoom_level * 100  # Rough estimate
-        
+
         # Provide warning for complex graphs
         if depth > 3 or zoom_level > 3:
             print(f"⚠️  Complex graph request: depth={depth}, zoom_level={zoom_level}")
-            print("💡 This may take several minutes to complete. Consider reducing depth or zoom level.")
+            print(
+                "💡 This may take several minutes to complete. "
+                "Consider reducing depth or zoom level."
+            )
 
         params = {
             "depth": depth,
@@ -484,22 +472,19 @@ class AthenaClient:
         max_attempts = 3 if auto_retry else 1
 
         # Get appropriate timeout for graph operations
-        operation_timeout = get_operation_timeout('graph', estimated_complexity)
-        
-        # Determine if we should show progress
-        should_show_progress = (
-            show_progress if show_progress is not None 
-            else settings.ATHENA_SHOW_PROGRESS
-        )
+        operation_timeout = get_operation_timeout("graph", estimated_complexity)
 
-        # Use progress context for complex graphs
-        progress_kwargs = {}
-        if should_show_progress and estimated_complexity > 500:
+        # Set up progress tracking if enabled
+        progress_kwargs: Optional[Dict[str, Any]] = None
+        if show_progress:
             progress_kwargs = {
-                'total': estimated_complexity,
-                'description': f"Building graph for concept {concept_id} (depth={depth}, zoom={zoom_level})",
-                'show_progress': True,
-                'update_interval': settings.ATHENA_PROGRESS_UPDATE_INTERVAL,
+                "total": estimated_complexity,
+                "description": (
+                    f"Building graph for concept {concept_id} "
+                    f"(depth={depth}, zoom={zoom_level})"
+                ),
+                "show_progress": show_progress,
+                "update_interval": settings.ATHENA_PROGRESS_UPDATE_INTERVAL,
             }
 
         with progress_context(**progress_kwargs) if progress_kwargs else nullcontext():
@@ -508,7 +493,7 @@ class AthenaClient:
                     # Create a temporary HTTP client with the appropriate timeout
                     temp_http = HttpClient(
                         base_url=self.http.base_url,
-                        token=self.http.session.headers.get('Authorization'),
+                        token=str(self.http.session.headers.get("Authorization", "")),
                         timeout=operation_timeout,
                         max_retries=1,  # We handle retries manually
                         enable_throttling=self.http.enable_throttling,
@@ -531,7 +516,8 @@ class AthenaClient:
                         # Enhanced error messages for graph operations
                         if "timeout" in error_msg.lower():
                             raise APIError(
-                                f"Graph timeout: The graph for concept {concept_id} is too complex. "
+                                f"Graph timeout: The graph for concept {concept_id} "
+                                f"is too complex. "
                                 f"Try:\n"
                                 f"• Reducing the depth (currently {depth})\n"
                                 f"• Reducing the zoom level (currently {zoom_level})\n"
@@ -571,7 +557,8 @@ class AthenaClient:
                     else:
                         # Final attempt failed, raise with enhanced message
                         raise AthenaError(
-                            f"Failed to get concept graph after {max_attempts} attempts. "
+                            f"Failed to get concept graph after {max_attempts} "
+                            f"attempts. "
                             f"Last error: {e}",
                             error_code="RETRY_FAILED",
                             troubleshooting=(
@@ -638,7 +625,9 @@ class Athena(AthenaClient):
 
 class nullcontext:
     """Context manager that does nothing."""
-    def __enter__(self):
+
+    def __enter__(self) -> None:
         return None
-    def __exit__(self, exc_type, exc_val, exc_tb):
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Literal[False]:
         return False

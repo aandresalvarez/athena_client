@@ -3,8 +3,6 @@
 import logging
 from unittest.mock import Mock, patch
 
-import pytest
-
 from athena_client.utils import configure_logging
 
 
@@ -17,9 +15,9 @@ class TestUtils:
             mock_logger = Mock()
             mock_logging.getLogger.return_value = mock_logger
             mock_logging.INFO = logging.INFO
-            
+
             configure_logging()
-            
+
             mock_logging.getLogger.assert_called_with("athena_client")
             mock_logger.setLevel.assert_called_with(logging.INFO)
 
@@ -29,9 +27,9 @@ class TestUtils:
             mock_logger = Mock()
             mock_logging.getLogger.return_value = mock_logger
             mock_logging.DEBUG = logging.DEBUG
-            
+
             configure_logging(logging.DEBUG)
-            
+
             mock_logger.setLevel.assert_called_with(logging.DEBUG)
 
     def test_configure_logging_with_existing_handlers(self):
@@ -43,9 +41,9 @@ class TestUtils:
             mock_logging.INFO = logging.INFO
             mock_logging.StreamHandler = Mock()
             mock_logging.Formatter = Mock()
-            
+
             configure_logging()
-            
+
             # Should not add new handler when handlers already exist
             mock_logging.StreamHandler.assert_not_called()
 
@@ -56,15 +54,15 @@ class TestUtils:
             mock_logger.handlers = []  # No existing handlers
             mock_logging.getLogger.return_value = mock_logger
             mock_logging.INFO = logging.INFO
-            
+
             mock_handler = Mock()
             mock_logging.StreamHandler.return_value = mock_handler
-            
+
             mock_formatter = Mock()
             mock_logging.Formatter.return_value = mock_formatter
-            
+
             configure_logging()
-            
+
             # Should create new handler and formatter
             mock_logging.StreamHandler.assert_called_once()
             mock_logging.Formatter.assert_called_once()
@@ -78,9 +76,9 @@ class TestUtils:
             mock_logger = Mock()
             mock_logging.getLogger.return_value = mock_logger
             mock_logging.INFO = logging.INFO
-            
+
             configure_logging(None)
-            
+
             # Should use default INFO level
             mock_logger.setLevel.assert_called_with(logging.INFO)
 
@@ -91,15 +89,15 @@ class TestUtils:
             mock_logger.handlers = []
             mock_logging.getLogger.return_value = mock_logger
             mock_logging.INFO = logging.INFO
-            
+
             mock_handler = Mock()
             mock_logging.StreamHandler.return_value = mock_handler
-            
+
             mock_formatter = Mock()
             mock_logging.Formatter.return_value = mock_formatter
-            
+
             configure_logging()
-            
+
             # Should create formatter with the correct format string
             expected_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
             mock_logging.Formatter.assert_called_with(expected_format)
@@ -111,15 +109,15 @@ class TestUtils:
             mock_logger.handlers = []
             mock_logging.getLogger.return_value = mock_logger
             mock_logging.INFO = logging.INFO
-            
+
             mock_handler = Mock()
             mock_logging.StreamHandler.return_value = mock_handler
-            
+
             mock_formatter = Mock()
             mock_logging.Formatter.return_value = mock_formatter
-            
+
             configure_logging(logging.DEBUG)
-            
+
             # Handler level should match the configured level
             mock_handler.setLevel.assert_called_with(logging.DEBUG)
 
@@ -129,9 +127,9 @@ class TestUtils:
             mock_logger = Mock()
             mock_logging.getLogger.return_value = mock_logger
             mock_logging.INFO = logging.INFO
-            
+
             configure_logging()
-            
+
             # Should get logger with the correct name
             mock_logging.getLogger.assert_called_with("athena_client")
 
@@ -143,19 +141,19 @@ class TestUtils:
             mock_logging.getLogger.return_value = mock_logger
             mock_logging.INFO = logging.INFO
             mock_logging.DEBUG = logging.DEBUG
-            
+
             mock_handler = Mock()
             mock_logging.StreamHandler.return_value = mock_handler
-            
+
             mock_formatter = Mock()
             mock_logging.Formatter.return_value = mock_formatter
-            
+
             # First call
             configure_logging(logging.INFO)
-            
+
             # Second call with different level
             configure_logging(logging.DEBUG)
-            
+
             # Should set level to DEBUG on second call
             assert mock_logger.setLevel.call_count == 2
             mock_logger.setLevel.assert_called_with(logging.DEBUG)
@@ -164,29 +162,29 @@ class TestUtils:
         """Test logging configuration integration with real logging."""
         # Test with real logging module
         original_handlers = logging.getLogger("athena_client").handlers[:]
-        
+
         try:
             # Configure logging
             configure_logging(logging.DEBUG)
-            
+
             # Get the logger
             logger = logging.getLogger("athena_client")
-            
+
             # Check that level is set correctly
             assert logger.level == logging.DEBUG
-            
+
             # Check that handlers were added
             assert len(logger.handlers) > 0
-            
+
             # Check that handler level is set correctly
             for handler in logger.handlers:
                 if isinstance(handler, logging.StreamHandler):
                     assert handler.level == logging.DEBUG
                     assert handler.formatter is not None
-                    
+
         finally:
             # Clean up - remove handlers we added
             logger = logging.getLogger("athena_client")
             for handler in logger.handlers[:]:
                 if handler not in original_handlers:
-                    logger.removeHandler(handler) 
+                    logger.removeHandler(handler)

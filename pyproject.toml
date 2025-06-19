@@ -23,13 +23,14 @@ dependencies = [
 packages = { find = { include = ["athena_client*"], exclude = ["output*"] } }
 
 [project.optional-dependencies]
-async = ["httpx>=0.18.0"]
+async = ["httpx>=0.18.0", "backoff>=2.0.0"]
 pandas = ["pandas>=1.3.0"]
 cli = ["click>=8.0.0", "rich>=10.0.0"]
 yaml = ["pyyaml>=6.0"]
 crypto = ["cryptography>=36.0.0"]
 all = [
     "httpx>=0.18.0",
+    "backoff>=2.0.0",
     "pandas>=1.3.0",
     "click>=8.0.0",
     "rich>=10.0.0",
@@ -63,6 +64,7 @@ features = ["dev", "all"]
 
 [project.scripts]
 athena = "athena_client.cli:main"
+athena-client = "athena_client.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/username/athena-client"

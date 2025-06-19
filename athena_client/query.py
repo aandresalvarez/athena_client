@@ -204,6 +204,8 @@ class Q:
                 return {
                     "filter": {"bool": {"must_not": [boosts_right.get("filter", {})]}}
                 }
+            # Fallback for unrecognized operator
+            return {"filter": {"query_string": {"query": self.value}}}
 
         # Handle basic query types
         query_dict: Dict[str, Any] = {}
@@ -230,7 +232,10 @@ class Q:
         if "fuzzy" in self.options:
             query_dict["fuzziness"] = self.options["fuzzy"]
 
-        return {"filter": {"query_string": query_dict}}
+        if query_dict:
+            return {"filter": {"query_string": query_dict}}
+        # Final fallback for unhandled query types
+        return {"filter": {"query_string": {"query": self.value}}}
 
     def __str__(self) -> str:
         """

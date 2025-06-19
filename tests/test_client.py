@@ -3,8 +3,6 @@ Tests for the AthenaClient class and its enhanced functionality.
 """
 
 import os
-import json
-import time
 from unittest.mock import Mock, patch
 
 import pytest
@@ -13,24 +11,18 @@ from athena_client import Athena
 from athena_client.client import AthenaClient
 from athena_client.exceptions import (
     APIError,
+    AthenaError,
     NetworkError,
     RetryFailedError,
-    AthenaError,
+)
+from athena_client.models import (
+    ConceptDetails,
+    ConceptRelationsGraph,
+    ConceptRelationship,
 )
 from athena_client.query import Q
-from athena_client.settings import get_settings
-from athena_client.models import (
-    Concept,
-    ConceptDetails,
-    ConceptRelationship,
-    ConceptRelationsGraph,
-    ConceptSearchResponse,
-    GraphLink,
-    GraphTerm,
-    RelationshipGroup,
-    RelationshipItem,
-)
 from athena_client.search_result import SearchResult
+from athena_client.settings import get_settings
 
 
 class TestAthenaClientInitialization:
@@ -373,7 +365,7 @@ class TestErrorScenarios:
             "errorMessage": "Authentication failed",
             "errorCode": "AUTH_ERROR",
         }
-        
+
         # Mock the HttpClient class to return our error response
         mock_http_client = Mock()
         mock_http_client.get.return_value = error_response
@@ -392,7 +384,7 @@ class TestErrorScenarios:
             "errorMessage": "Rate limit exceeded",
             "errorCode": "RATE_LIMIT",
         }
-        
+
         # Mock the HttpClient class to return our error response
         mock_http_client = Mock()
         mock_http_client.get.return_value = error_response
@@ -411,7 +403,7 @@ class TestErrorScenarios:
             "errorMessage": "Bad request",
             "errorCode": "BAD_REQUEST",
         }
-        
+
         # Mock the HttpClient class to return our error response
         mock_http_client = Mock()
         mock_http_client.get.return_value = error_response
@@ -430,7 +422,7 @@ class TestErrorScenarios:
             "errorMessage": "Internal server error",
             "errorCode": "SERVER_ERROR",
         }
-        
+
         # Mock the HttpClient class to return our error response
         mock_http_client = Mock()
         mock_http_client.get.return_value = error_response
@@ -597,7 +589,7 @@ class TestAthenaClient:
         mock_http_client.get.return_value = mock_response
 
         client = AthenaClient()
-        
+
         # Test with query object
         query = Q.term("test").fuzzy()
         result = client.search(query)
@@ -618,10 +610,10 @@ class TestAthenaClient:
         mock_http_client.get.return_value = error_response
 
         client = AthenaClient()
-        
+
         with pytest.raises(APIError) as exc_info:
             client.search("test", size=0)
-        
+
         # New error message is more specific
         assert "Invalid page size" in str(exc_info.value)
         assert "Page size must not be less than one" in str(exc_info.value)
@@ -639,12 +631,14 @@ class TestAthenaClient:
         mock_http_client.get.return_value = error_response
 
         client = AthenaClient()
-        
+
         # Now raises ValueError before making HTTP call
         with pytest.raises(ValueError) as exc_info:
             client.search("test", size=1001)
-        
-        assert "Page size 1001 exceeds maximum allowed size of 1000" in str(exc_info.value)
+
+        assert "Page size 1001 exceeds maximum allowed size of 1000" in str(
+            exc_info.value
+        )
 
     @patch("athena_client.client.HttpClient")
     def test_search_api_error_empty_query(self, mock_http_client_class):
@@ -659,10 +653,10 @@ class TestAthenaClient:
         mock_http_client.get.return_value = error_response
 
         client = AthenaClient()
-        
+
         with pytest.raises(APIError) as exc_info:
             client.search("")
-        
+
         # New error message is more specific
         assert "Empty search query" in str(exc_info.value)
         assert "Query must not be blank" in str(exc_info.value)
@@ -680,12 +674,14 @@ class TestAthenaClient:
         mock_http_client.get.return_value = error_response
 
         client = AthenaClient()
-        
+
         with pytest.raises(APIError) as exc_info:
             client.search("test")
-        
+
         # New error message is more specific
-        assert "Search failed" in str(exc_info.value) or "Some other error" in str(exc_info.value)
+        assert "Search failed" in str(exc_info.value) or "Some other error" in str(
+            exc_info.value
+        )
         assert "Some other error" in str(exc_info.value)
 
     @patch("athena_client.client.HttpClient")
@@ -715,7 +711,7 @@ class TestAthenaClient:
                 "size": 20,
                 "first": True,
                 "last": True,
-            }
+            },
         ]
 
         client = AthenaClient(max_retries=2, retry_delay=0.1)
@@ -734,10 +730,10 @@ class TestAthenaClient:
         mock_http_client.get.side_effect = Exception("Network error")
 
         client = AthenaClient(max_retries=2, retry_delay=0.1)
-        
+
         with pytest.raises(RetryFailedError) as exc_info:
             client.search("test")
-        
+
         assert "Search failed after 2 attempts" in str(exc_info.value)
         assert mock_http_client.get.call_count == 2
 
@@ -750,10 +746,10 @@ class TestAthenaClient:
         mock_http_client.get.side_effect = Exception("Network error")
 
         client = AthenaClient()
-        
+
         with pytest.raises(RetryFailedError) as exc_info:
             client.search("test", auto_retry=False)
-        
+
         assert "Search failed after 1 attempts" in str(exc_info.value)
         assert mock_http_client.get.call_count == 1
 
@@ -796,10 +792,10 @@ class TestAthenaClient:
         mock_http_client.get.return_value = error_response
 
         client = AthenaClient()
-        
+
         with pytest.raises(APIError) as exc_info:
             client.details(999)
-        
+
         assert "Concept not found" in str(exc_info.value)
         assert "Concept ID 999 does not exist" in str(exc_info.value)
 
@@ -816,10 +812,10 @@ class TestAthenaClient:
         mock_http_client.get.return_value = error_response
 
         client = AthenaClient()
-        
+
         with pytest.raises(APIError) as exc_info:
             client.details(1)
-        
+
         assert "Failed to get concept details" in str(exc_info.value)
         assert "Some other error" in str(exc_info.value)
 
@@ -841,7 +837,7 @@ class TestAthenaClient:
                 "conceptClassId": "Test Class",
                 "validStart": "2020-01-01",
                 "validEnd": "2020-12-31",
-            }
+            },
         ]
 
         client = AthenaClient(max_retries=2, retry_delay=0.1)
@@ -860,10 +856,10 @@ class TestAthenaClient:
         mock_http_client.get.side_effect = Exception("Network error")
 
         client = AthenaClient(max_retries=2, retry_delay=0.1)
-        
+
         with pytest.raises(AthenaError) as exc_info:
             client.details(1)
-        
+
         assert "Failed to get concept details after 3 attempts" in str(exc_info.value)
         assert mock_http_client.get.call_count == 3
 
@@ -912,10 +908,10 @@ class TestAthenaClient:
         mock_http_client.get.return_value = error_response
 
         client = AthenaClient()
-        
+
         with pytest.raises(APIError) as exc_info:
             client.relationships(999)
-        
+
         assert "Concept not found" in str(exc_info.value)
         assert "Concept ID 999 does not exist" in str(exc_info.value)
 
@@ -932,10 +928,10 @@ class TestAthenaClient:
         mock_http_client.get.return_value = error_response
 
         client = AthenaClient()
-        
+
         with pytest.raises(APIError) as exc_info:
             client.relationships(1)
-        
+
         assert "Failed to get relationships" in str(exc_info.value)
         assert "Some other error" in str(exc_info.value)
 
@@ -964,7 +960,7 @@ class TestAthenaClient:
                         ],
                     }
                 ],
-            }
+            },
         ]
 
         client = AthenaClient(max_retries=2, retry_delay=0.1)
@@ -983,10 +979,10 @@ class TestAthenaClient:
         mock_http_client.get.side_effect = Exception("Network error")
 
         client = AthenaClient(max_retries=2, retry_delay=0.1)
-        
+
         with pytest.raises(AthenaError) as exc_info:
             client.relationships(1)
-        
+
         assert "Failed to get relationships after 3 attempts" in str(exc_info.value)
         assert mock_http_client.get.call_count == 3
 
@@ -1056,7 +1052,7 @@ class TestAthenaClient:
                         "relationshipName": "Test Relationship",
                     }
                 ],
-            }
+            },
         ]
 
         client = AthenaClient(max_retries=2, retry_delay=0.1)
@@ -1075,10 +1071,10 @@ class TestAthenaClient:
         mock_http_client.get.side_effect = Exception("Network error")
 
         client = AthenaClient(max_retries=2, retry_delay=0.1)
-        
+
         with pytest.raises(AthenaError) as exc_info:
             client.graph(1)
-        
+
         assert "Failed to get concept graph after 3 attempts" in str(exc_info.value)
         assert mock_http_client.get.call_count == 3
 
@@ -1294,10 +1290,10 @@ class TestAthenaClient:
         mock_http_client.get.side_effect = Exception("Network error")
 
         client = AthenaClient(max_retries=2, retry_delay=0.1)
-        
+
         # Summary method catches exceptions and returns them as error messages
         result = client.summary(1)
-        
+
         assert isinstance(result, dict)
         assert "details" in result
         assert "relationships" in result
@@ -1305,10 +1301,20 @@ class TestAthenaClient:
         assert "error" in result["details"]
         assert "error" in result["relationships"]
         assert "error" in result["graph"]
-        assert "Failed to get concept details after 3 attempts" in result["details"]["error"]
-        assert "Failed to get relationships after 3 attempts" in result["relationships"]["error"]
-        assert "Failed to get concept graph after 3 attempts" in result["graph"]["error"]
-        assert mock_http_client.get.call_count == 9  # 3 calls each for details, relationships, and graph
+        assert (
+            "Failed to get concept details after 3 attempts"
+            in result["details"]["error"]
+        )
+        assert (
+            "Failed to get relationships after 3 attempts"
+            in result["relationships"]["error"]
+        )
+        assert (
+            "Failed to get concept graph after 3 attempts" in result["graph"]["error"]
+        )
+        assert (
+            mock_http_client.get.call_count == 9
+        )  # 3 calls each for details, relationships, and graph
 
 
 class TestAthena:

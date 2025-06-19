@@ -1,309 +1,351 @@
 #!/usr/bin/env python3
 """
-Concept Exploration Demo - Finding Standard Concepts
+Concept Exploration Demo
 
-This demo showcases how to use the concept exploration functionality to find
-standard concepts that might not appear directly in search results.
+This script demonstrates the ConceptExplorer with:
+- Async/await support for improved performance
+- BFS-based exploration algorithm
+- Batch processing of API calls
+- Configurable exploration parameters
+- Enhanced error handling
 
-Key features demonstrated:
-- Synonym-based concept discovery
-- Relationship exploration
-- Cross-vocabulary mapping
-- Confidence scoring
-- Alternative query suggestions
-- Concept hierarchy exploration
+Usage:
+    python concept_exploration_demo.py
 """
 
-import sys
-import os
+import asyncio
+import logging
+import time
+from typing import Dict, Any
 
-# Add parent directory to Python path for local execution
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Import the athena client
+try:
+    from athena_client import AthenaClient, create_concept_explorer
+    from athena_client.async_client import AthenaAsyncClient
+except ImportError:
+    print("Please install athena-client: pip install athena-client")
+    exit(1)
 
-from athena_client import Athena, ConceptExplorer, create_concept_explorer
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
-def demo_basic_concept_exploration():
-    """Demonstrate basic concept exploration functionality."""
-    print("\n🔍 BASIC CONCEPT EXPLORATION")
-    print("=" * 50)
+async def demo_basic_exploration():
+    """Demonstrate basic concept exploration with async client."""
+    print("\n" + "="*60)
+    print("DEMO 1: Basic Concept Exploration (Async Client)")
+    print("="*60)
     
-    # Create client and explorer
-    athena = Athena()
-    explorer = create_concept_explorer(athena)
+    # Initialize async client
+    client = AthenaAsyncClient()
+    explorer = create_concept_explorer(client)
     
-    # Example: Search for a term that might not have direct standard concept matches
-    query = "headache"
-    print(f"\nSearching for: '{query}'")
+    query = "migraine"
+    print(f"Exploring concepts for: '{query}'")
+    
+    start_time = time.time()
     
     try:
-        # Perform comprehensive exploration
-        results = explorer.find_standard_concepts(
+        # Perform async exploration with limits
+        results = await explorer.find_standard_concepts(
             query=query,
-            max_exploration_depth=2,
+            max_exploration_depth=1,  # Reduced depth
+            initial_seed_limit=3,     # Reduced seed limit
             include_synonyms=True,
             include_relationships=True,
-            vocabulary_priority=['SNOMED', 'RxNorm', 'ICD10']
+            max_total_concepts=20,    # Limit total concepts
+            max_api_calls=15,         # Limit API calls
+            max_time_seconds=20       # Limit time
         )
         
-        print(f"✅ Exploration completed!")
-        print(f"📊 Results summary:")
-        print(f"  - Direct matches: {len(results['direct_matches'])}")
-        print(f"  - Synonym matches: {len(results['synonym_matches'])}")
-        print(f"  - Relationship matches: {len(results['relationship_matches'])}")
-        print(f"  - Cross-references: {len(results['cross_references'])}")
+        elapsed_time = time.time() - start_time
         
-        # Show standard concepts found
-        all_standard = []
-        all_standard.extend(results['direct_matches'])
-        all_standard.extend(results['synonym_matches'])
-        all_standard.extend(results['relationship_matches'])
+        # Display results
+        print(f"\nExploration completed in {elapsed_time:.2f} seconds")
+        print(f"Direct matches: {len(results['direct_matches'])}")
+        print(f"Synonym matches: {len(results['synonym_matches'])}")
+        print(f"Relationship matches: {len(results['relationship_matches'])}")
+        print(f"Cross references: {len(results['cross_references'])}")
         
-        standard_concepts = [c for c in all_standard if c.standardConcept == "Standard"]
+        # Show exploration statistics
+        if 'exploration_stats' in results:
+            stats = results['exploration_stats']
+            print(f"\n📊 Exploration Statistics:")
+            print(f"  Total concepts found: {stats['total_concepts_found']}")
+            print(f"  API calls made: {stats['api_calls_made']}")
+            print(f"  Time elapsed: {stats['time_elapsed_seconds']:.2f}s")
+            print(f"  Limits reached:")
+            for limit_type, reached in stats['limits_reached'].items():
+                status = "✓" if reached else "✗"
+                print(f"    {status} {limit_type}")
         
-        print(f"\n🎯 Standard concepts found: {len(standard_concepts)}")
-        for i, concept in enumerate(standard_concepts[:5], 1):
-            print(f"  {i}. [{concept.id}] {concept.name}")
-            print(f"     Vocabulary: {concept.vocabulary}")
-            print(f"     Domain: {concept.domain}")
-            print(f"     Code: {concept.code}")
-            print()
-            
+        # Show some direct matches
+        if results['direct_matches']:
+            print("\nTop direct matches:")
+            for i, concept in enumerate(results['direct_matches'][:3], 1):
+                print(f"  {i}. {concept.name} ({concept.vocabulary}) - {concept.standardConcept}")
+        
+        # Show some synonym matches
+        if results['synonym_matches']:
+            print("\nTop synonym matches:")
+            for i, concept in enumerate(results['synonym_matches'][:3], 1):
+                print(f"  {i}. {concept.name} ({concept.vocabulary}) - {concept.standardConcept}")
+        
+        return results
+        
     except Exception as e:
-        print(f"❌ Exploration failed: {e}")
+        logger.error(f"Exploration failed: {e}")
+        return None
 
 
-def demo_mapping_to_standard_concepts():
-    """Demonstrate mapping queries to standard concepts with confidence scores."""
-    print("\n🗺️ MAPPING TO STANDARD CONCEPTS")
-    print("=" * 50)
+async def demo_mapping_with_confidence():
+    """Demonstrate concept mapping with confidence scores."""
+    print("\n" + "="*60)
+    print("DEMO 2: Concept Mapping with Confidence Scores")
+    print("="*60)
     
-    athena = Athena()
-    explorer = create_concept_explorer(athena)
+    client = AthenaAsyncClient()
+    explorer = create_concept_explorer(client)
     
-    # Example queries that might not have direct standard concept matches
-    test_queries = [
-        "migraine",
-        "hypertension", 
-        "diabetes",
-        "asthma"
-    ]
+    query = "diabetes mellitus"
+    print(f"Mapping query: '{query}' to standard concepts")
     
-    for query in test_queries:
-        print(f"\n🔍 Mapping: '{query}'")
+    try:
+        # Map to standard concepts with confidence scores and limits
+        mappings = await explorer.map_to_standard_concepts(
+            query=query,
+            target_vocabularies=["SNOMED", "RxNorm"],
+            confidence_threshold=0.3
+        )
+        
+        print(f"\nFound {len(mappings)} mappings above confidence threshold:")
+        
+        for i, mapping in enumerate(mappings[:5], 1):
+            concept = mapping['concept']
+            confidence = mapping['confidence']
+            path = mapping['exploration_path']
+            category = mapping['source_category']
+            
+            print(f"\n  {i}. {concept.name}")
+            print(f"     Vocabulary: {concept.vocabulary}")
+            print(f"     Confidence: {confidence:.3f}")
+            print(f"     Path: {path}")
+            print(f"     Category: {category}")
+        
+        return mappings
+        
+    except Exception as e:
+        logger.error(f"Mapping failed: {e}")
+        return None
+
+
+async def demo_performance_comparison():
+    """Compare performance between different exploration parameters."""
+    print("\n" + "="*60)
+    print("DEMO 3: Performance Comparison")
+    print("="*60)
+    
+    client = AthenaAsyncClient()
+    explorer = create_concept_explorer(client)
+    
+    query = "hypertension"
+    
+    # Test different initial_seed_limit values with strict limits
+    seed_limits = [2, 3, 5]
+    
+    for seed_limit in seed_limits:
+        print(f"\nTesting with initial_seed_limit={seed_limit}")
+        
+        start_time = time.time()
+        
         try:
-            mappings = explorer.map_to_standard_concepts(
+            results = await explorer.find_standard_concepts(
                 query=query,
-                target_vocabularies=['SNOMED', 'RxNorm', 'ICD10'],
-                confidence_threshold=0.3
+                max_exploration_depth=1,  # Keep depth low for comparison
+                initial_seed_limit=seed_limit,
+                include_synonyms=True,
+                include_relationships=True,
+                max_total_concepts=15,    # Strict limit
+                max_api_calls=10,         # Strict limit
+                max_time_seconds=15       # Strict limit
             )
             
-            print(f"✅ Found {len(mappings)} mappings")
+            elapsed_time = time.time() - start_time
+            total_concepts = (
+                len(results['direct_matches']) +
+                len(results['synonym_matches']) +
+                len(results['relationship_matches'])
+            )
             
-            for i, mapping in enumerate(mappings[:3], 1):
-                concept = mapping['concept']
-                confidence = mapping['confidence']
-                path = mapping['exploration_path']
-                
-                print(f"  {i}. [{concept.id}] {concept.name}")
-                print(f"     Vocabulary: {concept.vocabulary}")
-                print(f"     Confidence: {confidence:.2f}")
-                print(f"     Path: {path}")
-                print()
-                
+            print(f"  Time: {elapsed_time:.2f}s")
+            print(f"  Total concepts found: {total_concepts}")
+            print(f"  Direct matches: {len(results['direct_matches'])}")
+            print(f"  Synonym matches: {len(results['synonym_matches'])}")
+            print(f"  Relationship matches: {len(results['relationship_matches'])}")
+            
+            # Show exploration stats
+            if 'exploration_stats' in results:
+                stats = results['exploration_stats']
+                print(f"  API calls: {stats['api_calls_made']}")
+                print(f"  Limits hit: {sum(stats['limits_reached'].values())}")
+            
         except Exception as e:
-            print(f"❌ Mapping failed: {e}")
+            logger.error(f"Test failed for seed_limit={seed_limit}: {e}")
 
 
-def demo_alternative_query_suggestions():
-    """Demonstrate alternative query suggestions."""
-    print("\n💡 ALTERNATIVE QUERY SUGGESTIONS")
-    print("=" * 50)
+async def demo_error_handling():
+    """Demonstrate error handling in the new implementation."""
+    print("\n" + "="*60)
+    print("DEMO 4: Error Handling")
+    print("="*60)
     
-    athena = Athena()
-    explorer = create_concept_explorer(athena)
+    client = AthenaAsyncClient()
+    explorer = create_concept_explorer(client)
     
-    # Example queries that might need alternatives
-    test_queries = [
-        "heart attack",
-        "high blood pressure",
-        "sugar disease"
-    ]
+    # Test with invalid parameters
+    print("Testing parameter validation:")
     
-    for query in test_queries:
-        print(f"\n🔍 Original query: '{query}'")
+    try:
+        await explorer.find_standard_concepts(
+            query="test",
+            max_exploration_depth=-1  # Invalid: negative depth
+        )
+    except ValueError as e:
+        print(f"  ✓ Caught invalid max_exploration_depth: {e}")
+    
+    try:
+        await explorer.find_standard_concepts(
+            query="test",
+            initial_seed_limit=0  # Invalid: zero seed limit
+        )
+    except ValueError as e:
+        print(f"  ✓ Caught invalid initial_seed_limit: {e}")
+    
+    try:
+        await explorer.find_standard_concepts(
+            query="test",
+            max_total_concepts=0  # Invalid: zero concepts limit
+        )
+    except ValueError as e:
+        print(f"  ✓ Caught invalid max_total_concepts: {e}")
+    
+    # Test with non-existent query
+    print("\nTesting with non-existent query:")
+    try:
+        results = await explorer.find_standard_concepts(
+            query="this_query_should_not_exist_12345",
+            max_exploration_depth=1,
+            initial_seed_limit=3,
+            max_total_concepts=10,
+            max_api_calls=5,
+            max_time_seconds=10
+        )
         
+        print(f"  ✓ Handled empty results gracefully")
+        print(f"  Direct matches: {len(results['direct_matches'])}")
+        
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+
+
+async def demo_alternative_queries():
+    """Demonstrate alternative query suggestions."""
+    print("\n" + "="*60)
+    print("DEMO 5: Alternative Query Suggestions")
+    print("="*60)
+    
+    client = AthenaAsyncClient()
+    explorer = create_concept_explorer(client)
+    
+    queries = ["migraine", "diabetes", "hypertension"]
+    
+    for query in queries:
+        print(f"\nSuggestions for '{query}':")
         try:
-            suggestions = explorer.suggest_alternative_queries(query, max_suggestions=8)
+            suggestions = await explorer.suggest_alternative_queries(
+                query=query,
+                max_suggestions=5
+            )
             
-            print(f"💡 Alternative suggestions:")
             for i, suggestion in enumerate(suggestions, 1):
                 print(f"  {i}. {suggestion}")
                 
-            # Test one of the suggestions
-            if suggestions:
-                test_suggestion = suggestions[0]
-                print(f"\n🧪 Testing suggestion: '{test_suggestion}'")
-                
-                test_results = athena.search(test_suggestion, size=3)
-                standard_found = [c for c in test_results.all() if c.standardConcept == "Standard"]
-                
-                print(f"   Found {len(standard_found)} standard concepts")
-                for concept in standard_found[:2]:
-                    print(f"   - [{concept.id}] {concept.name} ({concept.vocabulary})")
-                    
         except Exception as e:
-            print(f"❌ Suggestion failed: {e}")
+            logger.error(f"Failed to get suggestions for '{query}': {e}")
 
 
-def demo_concept_hierarchy_exploration():
+async def demo_concept_hierarchy():
     """Demonstrate concept hierarchy exploration."""
-    print("\n🌳 CONCEPT HIERARCHY EXPLORATION")
-    print("=" * 50)
+    print("\n" + "="*60)
+    print("DEMO 6: Concept Hierarchy")
+    print("="*60)
     
-    athena = Athena()
-    explorer = create_concept_explorer(athena)
+    client = AthenaAsyncClient()
+    explorer = create_concept_explorer(client)
     
     # First, find a concept to explore
-    print("\n🔍 Finding a concept to explore...")
     try:
-        search_results = athena.search("diabetes", size=5)
-        if search_results:
-            # Use the first result
-            concept = search_results[0]
-            print(f"✅ Exploring hierarchy for: [{concept.id}] {concept.name}")
-            
-            hierarchy = explorer.get_concept_hierarchy(concept.id, max_depth=2)
-            
-            print(f"\n📊 Hierarchy summary:")
-            print(f"  - Root concept: {hierarchy['root_concept'].name if hierarchy['root_concept'] else 'None'}")
-            print(f"  - Parents: {len(hierarchy['parents'])}")
-            print(f"  - Children: {len(hierarchy['children'])}")
-            print(f"  - Siblings: {len(hierarchy['siblings'])}")
-            
-            # Show some relationships
-            if hierarchy['parents']:
-                print(f"\n👆 Parent relationships:")
-                for i, parent in enumerate(hierarchy['parents'][:3], 1):
-                    print(f"  {i}. {parent.relationshipName}: {parent.targetConceptName}")
-                    
-            if hierarchy['children']:
-                print(f"\n👇 Child relationships:")
-                for i, child in enumerate(hierarchy['children'][:3], 1):
-                    print(f"  {i}. {child.relationshipName}: {child.targetConceptName}")
-                    
-        else:
-            print("❌ No concepts found to explore")
-            
-    except Exception as e:
-        print(f"❌ Hierarchy exploration failed: {e}")
-
-
-def demo_comprehensive_workflow():
-    """Demonstrate a comprehensive workflow for finding standard concepts."""
-    print("\n🔄 COMPREHENSIVE WORKFLOW")
-    print("=" * 50)
-    
-    athena = Athena()
-    explorer = create_concept_explorer(athena)
-    
-    # Example: Finding standard concepts for a complex medical term
-    query = "myocardial infarction"
-    print(f"\n🎯 Target: Find standard concepts for '{query}'")
-    
-    try:
-        # Step 1: Try direct search first
-        print("\n1️⃣ Step 1: Direct search")
-        direct_results = athena.search(query, size=10)
-        direct_standard = [c for c in direct_results.all() if c.standardConcept == "Standard"]
-        print(f"   Found {len(direct_standard)} standard concepts directly")
+        results = await explorer.find_standard_concepts(
+            query="migraine",
+            max_exploration_depth=1,
+            initial_seed_limit=1
+        )
         
-        if not direct_standard:
-            print("   ⚠️ No standard concepts found directly, exploring...")
+        if results['direct_matches']:
+            concept = results['direct_matches'][0]
+            print(f"Exploring hierarchy for: {concept.name} (ID: {concept.id})")
             
-            # Step 2: Use concept exploration
-            print("\n2️⃣ Step 2: Concept exploration")
-            exploration_results = explorer.find_standard_concepts(
-                query=query,
-                max_exploration_depth=3,
-                include_synonyms=True,
-                include_relationships=True
+            hierarchy = await explorer.get_concept_hierarchy(
+                concept_id=concept.id,
+                max_depth=2
             )
             
-            # Step 3: Get mappings with confidence scores
-            print("\n3️⃣ Step 3: Mapping with confidence scores")
-            mappings = explorer.map_to_standard_concepts(
-                query=query,
-                confidence_threshold=0.4
-            )
+            print(f"  Root concept: {hierarchy['root_concept'].name}")
+            print(f"  Parents: {len(hierarchy['parents'])}")
+            print(f"  Children: {len(hierarchy['children'])}")
+            print(f"  Depth: {hierarchy['depth']}")
             
-            print(f"   Found {len(mappings)} high-confidence mappings")
+            if hierarchy['parents']:
+                print("\n  Parent concepts:")
+                for parent in hierarchy['parents'][:3]:
+                    print(f"    - {parent.name} ({parent.vocabularyId})")
             
-            # Step 4: Show best matches
-            print("\n4️⃣ Step 4: Best matches")
-            for i, mapping in enumerate(mappings[:5], 1):
-                concept = mapping['concept']
-                confidence = mapping['confidence']
-                path = mapping['exploration_path']
-                
-                print(f"   {i}. [{concept.id}] {concept.name}")
-                print(f"      Vocabulary: {concept.vocabulary}")
-                print(f"      Domain: {concept.domain}")
-                print(f"      Confidence: {confidence:.2f}")
-                print(f"      Discovery path: {path}")
-                print()
-                
-            # Step 5: Explore hierarchy for the best match
-            if mappings:
-                best_concept = mappings[0]['concept']
-                print(f"\n5️⃣ Step 5: Exploring hierarchy for best match")
-                print(f"   Exploring: [{best_concept.id}] {best_concept.name}")
-                
-                hierarchy = explorer.get_concept_hierarchy(best_concept.id, max_depth=1)
-                
-                if hierarchy['parents']:
-                    print(f"   👆 Parent concepts:")
-                    for parent in hierarchy['parents'][:2]:
-                        print(f"      - {parent.targetConceptName} ({parent.relationshipName})")
-                        
-        else:
-            print("   ✅ Found standard concepts directly!")
-            for concept in direct_standard[:3]:
-                print(f"      - [{concept.id}] {concept.name} ({concept.vocabulary})")
-                
+            if hierarchy['children']:
+                print("\n  Child concepts:")
+                for child in hierarchy['children'][:3]:
+                    print(f"    - {child.name} ({child.vocabularyId})")
+        
     except Exception as e:
-        print(f"❌ Workflow failed: {e}")
+        logger.error(f"Hierarchy exploration failed: {e}")
 
 
-def main():
-    """Run the concept exploration demo."""
-    print("🚀 ATHENA CLIENT - CONCEPT EXPLORATION DEMO")
-    print("=" * 60)
-    print("This demo showcases advanced concept exploration features")
-    print("to help find standard concepts that might not appear")
-    print("directly in search results.")
-    print("=" * 60)
+async def main():
+    """Run all demos."""
+    print("Concept Exploration Demo")
+    print("This demo showcases the ConceptExplorer with:")
+    print("- Async/await support for improved performance")
+    print("- BFS-based exploration algorithm")
+    print("- Batch processing of API calls")
+    print("- Configurable exploration parameters")
+    print("- Enhanced error handling")
     
-    demo_basic_concept_exploration()
-    demo_mapping_to_standard_concepts()
-    demo_alternative_query_suggestions()
-    demo_concept_hierarchy_exploration()
-    demo_comprehensive_workflow()
+    # Run all demos
+    await demo_basic_exploration()
+    await demo_mapping_with_confidence()
+    await demo_performance_comparison()
+    await demo_error_handling()
+    await demo_alternative_queries()
+    await demo_concept_hierarchy()
     
-    print("\n" + "=" * 60)
-    print("🎉 CONCEPT EXPLORATION DEMO COMPLETED!")
-    print("=" * 60)
-    print("\nKey Features Demonstrated:")
-    print("  ✅ Synonym-based concept discovery")
-    print("  ✅ Relationship exploration")
-    print("  ✅ Cross-vocabulary mapping")
-    print("  ✅ Confidence scoring")
-    print("  ✅ Alternative query suggestions")
-    print("  ✅ Concept hierarchy exploration")
-    print("  ✅ Comprehensive workflow for finding standard concepts")
-    print("\nThese features help bridge the gap between user queries")
-    print("and standard medical concepts in the vocabulary.")
+    print("\n" + "="*60)
+    print("Demo completed!")
+    print("="*60)
 
 
 if __name__ == "__main__":
-    main() 
+    # Run the async main function
+    asyncio.run(main()) 

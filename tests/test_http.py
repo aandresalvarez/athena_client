@@ -1,16 +1,14 @@
 """Tests for the enhanced HttpClient class."""
 
 import json
-import time
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from urllib.parse import urljoin
 
 import pytest
 import requests
-from requests.exceptions import RequestException, Timeout, ConnectionError
+from requests.exceptions import ConnectionError, Timeout
 
 from athena_client.exceptions import (
-    AthenaError,
     AuthenticationError,
     ClientError,
     NetworkError,
@@ -20,7 +18,6 @@ from athena_client.exceptions import (
     ValidationError,
 )
 from athena_client.http import HttpClient
-from athena_client.settings import get_settings
 
 
 class TestHttpClient:
@@ -86,7 +83,7 @@ class TestHttpClient:
     def test_throttle_request_enabled(self):
         """Test request throttling when enabled."""
         client = HttpClient(enable_throttling=True)
-        
+
         with patch("time.sleep") as mock_sleep:
             client._throttle_request()
             mock_sleep.assert_called_once()
@@ -94,7 +91,7 @@ class TestHttpClient:
     def test_throttle_request_disabled(self):
         """Test request throttling when disabled."""
         client = HttpClient(enable_throttling=False)
-        
+
         with patch("time.sleep") as mock_sleep:
             client._throttle_request()
             mock_sleep.assert_not_called()
@@ -129,13 +126,13 @@ class TestHttpClient:
     def test_normalize_params(self):
         """Test parameter normalization."""
         client = HttpClient()
-        
+
         # Test with None
         assert client._normalize_params(None) is None
-        
+
         # Test with empty dict
         assert client._normalize_params({}) == {}
-        
+
         # Test with mixed types
         params = {"string": "value", "int": 123, "float": 1.23, "bool": True}
         normalized = client._normalize_params(params)
@@ -143,7 +140,7 @@ class TestHttpClient:
             "string": "value",
             "int": "123",
             "float": "1.23",
-            "bool": "True"
+            "bool": "True",
         }
 
     def test_handle_response_success(self):
@@ -164,7 +161,7 @@ class TestHttpClient:
         response.status_code = 400
         response.reason_phrase = "Bad Request"
         response.text = "Invalid request"
-        
+
         # Create a proper HTTPError with the response object
         http_error = requests.exceptions.HTTPError("400 Bad Request")
         http_error.response = response
@@ -172,7 +169,7 @@ class TestHttpClient:
 
         with pytest.raises(ClientError) as exc_info:
             client._handle_response(response, "https://api.example.com/test")
-        
+
         assert "400" in str(exc_info.value)
 
     def test_handle_response_401_error(self):
@@ -182,7 +179,7 @@ class TestHttpClient:
         response.status_code = 401
         response.reason_phrase = "Unauthorized"
         response.text = "Authentication required"
-        
+
         # Create a proper HTTPError with the response object
         http_error = requests.exceptions.HTTPError("401 Unauthorized")
         http_error.response = response
@@ -190,7 +187,7 @@ class TestHttpClient:
 
         with pytest.raises(AuthenticationError) as exc_info:
             client._handle_response(response, "https://api.example.com/test")
-        
+
         assert "401" in str(exc_info.value)
 
     def test_handle_response_429_error(self):
@@ -200,7 +197,7 @@ class TestHttpClient:
         response.status_code = 429
         response.reason_phrase = "Too Many Requests"
         response.text = "Rate limit exceeded"
-        
+
         # Create a proper HTTPError with the response object
         http_error = requests.exceptions.HTTPError("429 Too Many Requests")
         http_error.response = response
@@ -208,7 +205,7 @@ class TestHttpClient:
 
         with pytest.raises(RateLimitError) as exc_info:
             client._handle_response(response, "https://api.example.com/test")
-        
+
         assert "429" in str(exc_info.value)
 
     def test_handle_response_500_error(self):
@@ -218,7 +215,7 @@ class TestHttpClient:
         response.status_code = 500
         response.reason_phrase = "Internal Server Error"
         response.text = "Server error"
-        
+
         # Create a proper HTTPError with the response object
         http_error = requests.exceptions.HTTPError("500 Internal Server Error")
         http_error.response = response
@@ -226,7 +223,7 @@ class TestHttpClient:
 
         with pytest.raises(ServerError) as exc_info:
             client._handle_response(response, "https://api.example.com/test")
-        
+
         assert "500" in str(exc_info.value)
 
     def test_handle_response_invalid_json(self):
@@ -239,21 +236,21 @@ class TestHttpClient:
 
         with pytest.raises(ValidationError) as exc_info:
             client._handle_response(response, "https://api.example.com/test")
-        
+
         assert "Invalid JSON" in str(exc_info.value)
 
     @patch("athena_client.http.build_headers")
     def test_request_success(self, mock_build_headers):
         """Test successful request."""
         mock_build_headers.return_value = {"Authorization": "Bearer token"}
-        
+
         client = HttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": "success"}
         mock_response.text = "success response"
         mock_response.reason = "OK"
-        
+
         with patch.object(client.session, "request", return_value=mock_response):
             result = client.request("GET", "/test")
             assert result == {"result": "success"}
@@ -262,15 +259,17 @@ class TestHttpClient:
     def test_request_with_params(self, mock_build_headers):
         """Test request with parameters."""
         mock_build_headers.return_value = {}
-        
+
         client = HttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": "success"}
         mock_response.text = "success response"
         mock_response.reason = "OK"
-        
-        with patch.object(client.session, "request", return_value=mock_response) as mock_request:
+
+        with patch.object(
+            client.session, "request", return_value=mock_response
+        ) as mock_request:
             client.request("GET", "/test", params={"key": "value"})
             mock_request.assert_called_once()
             call_args = mock_request.call_args
@@ -280,15 +279,17 @@ class TestHttpClient:
     def test_request_with_data(self, mock_build_headers):
         """Test request with data."""
         mock_build_headers.return_value = {}
-        
+
         client = HttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": "success"}
         mock_response.text = "success response"
         mock_response.reason = "OK"
-        
-        with patch.object(client.session, "request", return_value=mock_response) as mock_request:
+
+        with patch.object(
+            client.session, "request", return_value=mock_response
+        ) as mock_request:
             client.request("POST", "/test", data={"key": "value"})
             mock_request.assert_called_once()
             call_args = mock_request.call_args
@@ -298,11 +299,11 @@ class TestHttpClient:
     def test_request_raw_response(self, mock_build_headers):
         """Test request with raw response."""
         mock_build_headers.return_value = {}
-        
+
         client = HttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
-        
+
         with patch.object(client.session, "request", return_value=mock_response):
             result = client.request("GET", "/test", raw_response=True)
             assert result == mock_response
@@ -311,10 +312,12 @@ class TestHttpClient:
     def test_request_network_error(self, mock_build_headers):
         """Test request with network error."""
         mock_build_headers.return_value = {}
-        
+
         client = HttpClient()
-        
-        with patch.object(client.session, "request", side_effect=ConnectionError("Connection failed")):
+
+        with patch.object(
+            client.session, "request", side_effect=ConnectionError("Connection failed")
+        ):
             with pytest.raises(NetworkError) as exc_info:
                 client.request("GET", "/test")
             assert "Connection error" in str(exc_info.value)
@@ -323,10 +326,12 @@ class TestHttpClient:
     def test_request_timeout_error(self, mock_build_headers):
         """Test request with timeout error."""
         mock_build_headers.return_value = {}
-        
+
         client = HttpClient()
-        
-        with patch.object(client.session, "request", side_effect=Timeout("Request timeout")):
+
+        with patch.object(
+            client.session, "request", side_effect=Timeout("Request timeout")
+        ):
             with pytest.raises(TimeoutError) as exc_info:
                 client.request("GET", "/test")
             assert "Timeout" in str(exc_info.value)
@@ -334,29 +339,33 @@ class TestHttpClient:
     def test_get_method(self):
         """Test GET method."""
         client = HttpClient()
-        
+
         with patch.object(client, "request") as mock_request:
             mock_request.return_value = {"result": "success"}
             result = client.get("/test", params={"key": "value"})
-            
-            mock_request.assert_called_once_with("GET", "/test", params={"key": "value"}, raw_response=False)
+
+            mock_request.assert_called_once_with(
+                "GET", "/test", params={"key": "value"}, raw_response=False
+            )
             assert result == {"result": "success"}
 
     def test_post_method(self):
         """Test POST method."""
         client = HttpClient()
-        
+
         with patch.object(client, "request") as mock_request:
             mock_request.return_value = {"result": "success"}
             result = client.post("/test", data={"key": "value"})
-            
-            mock_request.assert_called_once_with("POST", "/test", data={"key": "value"}, params=None, raw_response=False)
+
+            mock_request.assert_called_once_with(
+                "POST", "/test", data={"key": "value"}, params=None, raw_response=False
+            )
             assert result == {"result": "success"}
 
     def test_close(self):
         """Test client close method."""
         client = HttpClient()
-        
+
         with patch.object(client.session, "close") as mock_close:
             client.close()
             mock_close.assert_called_once()
@@ -365,16 +374,16 @@ class TestHttpClient:
         """Test client as context manager."""
         with HttpClient() as client:
             assert isinstance(client, HttpClient)
-        
+
         # Session should be closed after context exit
-        # Note: requests.Session doesn't have a 'closed' attribute, so we check if close was called
-        # This is a limitation of the current implementation
+        # Note: requests.Session doesn't have a 'closed' attribute, so we check
+        # if close was called
 
     def test_context_manager_exception(self):
         """Test context manager with exception."""
         with pytest.raises(ValueError):
-            with HttpClient() as client:
+            with HttpClient():
                 raise ValueError("Test exception")
-        
+
         # Session should still be closed even with exception
         # Note: requests.Session doesn't have a 'closed' attribute

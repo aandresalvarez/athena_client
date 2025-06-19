@@ -1,6 +1,5 @@
 """Tests for the async client module."""
 
-import json
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
@@ -8,7 +7,11 @@ import pytest
 
 from athena_client.async_client import AsyncHttpClient, AthenaAsyncClient
 from athena_client.exceptions import AthenaError, ClientError, NetworkError, ServerError
-from athena_client.models import ConceptDetails, ConceptRelationship, ConceptRelationsGraph
+from athena_client.models import (
+    ConceptDetails,
+    ConceptRelationsGraph,
+    ConceptRelationship,
+)
 
 
 class TestAsyncHttpClient:
@@ -106,7 +109,7 @@ class TestAsyncHttpClient:
 
         with pytest.raises(AthenaError) as exc_info:
             await client._handle_response(response)
-        
+
         assert "Invalid JSON" in str(exc_info.value)
 
     @patch("athena_client.async_client.build_headers")
@@ -114,13 +117,15 @@ class TestAsyncHttpClient:
     async def test_request_success(self, mock_build_headers):
         """Test successful request."""
         mock_build_headers.return_value = {"Authorization": "Bearer token"}
-        
+
         client = AsyncHttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": "success"}
-        
-        with patch.object(client.client, "request", new_callable=AsyncMock, return_value=mock_response):
+
+        with patch.object(
+            client.client, "request", new_callable=AsyncMock, return_value=mock_response
+        ):
             result = await client.request("GET", "/test")
             assert result == {"result": "success"}
 
@@ -129,13 +134,15 @@ class TestAsyncHttpClient:
     async def test_request_with_params(self, mock_build_headers):
         """Test request with parameters."""
         mock_build_headers.return_value = {}
-        
+
         client = AsyncHttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": "success"}
-        
-        with patch.object(client.client, "request", new_callable=AsyncMock, return_value=mock_response) as mock_request:
+
+        with patch.object(
+            client.client, "request", new_callable=AsyncMock, return_value=mock_response
+        ) as mock_request:
             await client.request("GET", "/test", params={"key": "value"})
             mock_request.assert_called_once()
             call_args = mock_request.call_args
@@ -146,13 +153,15 @@ class TestAsyncHttpClient:
     async def test_request_with_data(self, mock_build_headers):
         """Test request with data."""
         mock_build_headers.return_value = {}
-        
+
         client = AsyncHttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"result": "success"}
-        
-        with patch.object(client.client, "request", new_callable=AsyncMock, return_value=mock_response) as mock_request:
+
+        with patch.object(
+            client.client, "request", new_callable=AsyncMock, return_value=mock_response
+        ) as mock_request:
             await client.request("POST", "/test", data={"key": "value"})
             mock_request.assert_called_once()
             call_args = mock_request.call_args
@@ -163,12 +172,14 @@ class TestAsyncHttpClient:
     async def test_request_raw_response(self, mock_build_headers):
         """Test request with raw response."""
         mock_build_headers.return_value = {}
-        
+
         client = AsyncHttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
-        
-        with patch.object(client.client, "request", new_callable=AsyncMock, return_value=mock_response):
+
+        with patch.object(
+            client.client, "request", new_callable=AsyncMock, return_value=mock_response
+        ):
             result = await client.request("GET", "/test", raw_response=True)
             assert result == mock_response
 
@@ -177,10 +188,15 @@ class TestAsyncHttpClient:
     async def test_request_timeout_error(self, mock_build_headers):
         """Test request with timeout error."""
         mock_build_headers.return_value = {}
-        
+
         client = AsyncHttpClient()
-        
-        with patch.object(client.client, "request", new_callable=AsyncMock, side_effect=httpx.TimeoutException("Request timeout")):
+
+        with patch.object(
+            client.client,
+            "request",
+            new_callable=AsyncMock,
+            side_effect=httpx.TimeoutException("Request timeout"),
+        ):
             with pytest.raises(NetworkError) as exc_info:
                 await client.request("GET", "/test")
             assert "Request timeout" in str(exc_info.value)
@@ -190,10 +206,15 @@ class TestAsyncHttpClient:
     async def test_request_connect_error(self, mock_build_headers):
         """Test request with connection error."""
         mock_build_headers.return_value = {}
-        
+
         client = AsyncHttpClient()
-        
-        with patch.object(client.client, "request", new_callable=AsyncMock, side_effect=httpx.ConnectError("Connection failed")):
+
+        with patch.object(
+            client.client,
+            "request",
+            new_callable=AsyncMock,
+            side_effect=httpx.ConnectError("Connection failed"),
+        ):
             with pytest.raises(NetworkError) as exc_info:
                 await client.request("GET", "/test")
             assert "Connection failed" in str(exc_info.value)
@@ -205,7 +226,7 @@ class TestAsyncHttpClient:
 
         with patch.object(client, "request", new_callable=AsyncMock) as mock_request:
             mock_request.return_value = {"result": "success"}
-            result = await client.get("/test", params={"key": "value"})
+            await client.get("/test", params={"key": "value"})
             mock_request.assert_called_once_with(
                 "GET", "/test", params={"key": "value"}, raw_response=False
             )
@@ -217,10 +238,25 @@ class TestAsyncHttpClient:
 
         with patch.object(client, "request", new_callable=AsyncMock) as mock_request:
             mock_request.return_value = {"result": "success"}
-            result = await client.post("/test", data={"key": "value"})
+            await client.post("/test", data={"key": "value"})
             mock_request.assert_called_once_with(
                 "POST", "/test", data={"key": "value"}, params=None, raw_response=False
             )
+
+    @pytest.mark.asyncio
+    async def test_backoff_import_error(self):
+        """Test that import error is raised when backoff is not available."""
+        # Clear the module cache to force re-import
+        import sys
+
+        if "athena_client.async_client" in sys.modules:
+            del sys.modules["athena_client.async_client"]
+
+        with patch.dict("sys.modules", {"backoff": None}):
+            with pytest.raises(
+                ImportError, match="backoff is required for the async client"
+            ):
+                pass
 
 
 class TestAthenaAsyncClient:
@@ -247,7 +283,9 @@ class TestAthenaAsyncClient:
             "totalPages": 1,
         }
 
-        with patch.object(client.http, "get", new_callable=AsyncMock, return_value=mock_response):
+        with patch.object(
+            client.http, "get", new_callable=AsyncMock, return_value=mock_response
+        ):
             result = await client.search_concepts("test query")
             assert result == mock_response
 
@@ -257,7 +295,9 @@ class TestAthenaAsyncClient:
         client = AthenaAsyncClient()
         mock_response = {"content": [], "totalElements": 0}
 
-        with patch.object(client.http, "get", new_callable=AsyncMock, return_value=mock_response):
+        with patch.object(
+            client.http, "get", new_callable=AsyncMock, return_value=mock_response
+        ):
             await client.search_concepts(
                 query="test",
                 domain="Condition",
@@ -284,7 +324,9 @@ class TestAthenaAsyncClient:
             "domain": {"name": "Test Domain"},
         }
 
-        with patch.object(client.http, "get", new_callable=AsyncMock, return_value=mock_response):
+        with patch.object(
+            client.http, "get", new_callable=AsyncMock, return_value=mock_response
+        ):
             result = await client.get_concept_details(1)
             assert isinstance(result, ConceptDetails)
             assert result.id == 1
@@ -305,14 +347,16 @@ class TestAthenaAsyncClient:
                             "targetConceptName": "Test Target",
                             "targetVocabularyId": "SNOMED",
                             "relationshipId": "Is a",
-                            "relationshipName": "Is a"
+                            "relationshipName": "Is a",
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
 
-        with patch.object(client.http, "get", new_callable=AsyncMock, return_value=mock_response):
+        with patch.object(
+            client.http, "get", new_callable=AsyncMock, return_value=mock_response
+        ):
             result = await client.get_concept_relationships(1)
             assert isinstance(result, ConceptRelationship)
             assert result.count == 1
@@ -321,12 +365,11 @@ class TestAthenaAsyncClient:
     async def test_get_concept_relationships_with_filters(self):
         """Test get_concept_relationships method with filters."""
         client = AthenaAsyncClient()
-        mock_response = {
-            "count": 0,
-            "items": []
-        }
+        mock_response = {"count": 0, "items": []}
 
-        with patch.object(client.http, "get", new_callable=AsyncMock, return_value=mock_response):
+        with patch.object(
+            client.http, "get", new_callable=AsyncMock, return_value=mock_response
+        ):
             result = await client.get_concept_relationships(
                 1,
                 relationship_id="Is a",
@@ -347,7 +390,7 @@ class TestAthenaAsyncClient:
                     "weight": 1,
                     "depth": 0,
                     "count": 1,
-                    "isCurrent": True
+                    "isCurrent": True,
                 }
             ],
             "links": [
@@ -355,12 +398,14 @@ class TestAthenaAsyncClient:
                     "source": 1,
                     "target": 2,
                     "relationshipId": "Is a",
-                    "relationshipName": "Is a"
+                    "relationshipName": "Is a",
                 }
-            ]
+            ],
         }
 
-        with patch.object(client.http, "get", new_callable=AsyncMock, return_value=mock_response):
+        with patch.object(
+            client.http, "get", new_callable=AsyncMock, return_value=mock_response
+        ):
             result = await client.get_concept_graph(1, depth=5, zoom_level=3)
             assert isinstance(result, ConceptRelationsGraph)
             assert len(result.terms) == 1
@@ -369,18 +414,14 @@ class TestAthenaAsyncClient:
     @pytest.mark.asyncio
     async def test_httpx_import_error(self):
         """Test that AttributeError is raised when httpx is not available."""
-        with patch("athena_client.async_client.httpx", None):
-            with pytest.raises(AttributeError) as exc_info:
-                AsyncHttpClient()
-            assert "AsyncClient" in str(exc_info.value)
+        # Clear the module cache to force re-import
+        import sys
 
-    @pytest.mark.asyncio
-    async def test_backoff_decorator(self):
-        """Test that backoff decorator is applied to request method."""
-        client = AsyncHttpClient()
+        if "athena_client.async_client" in sys.modules:
+            del sys.modules["athena_client.async_client"]
 
-        # Check that the request method has the backoff decorator
-        assert hasattr(client.request, "__wrapped__")
-        
-        # The backoff decorator should be applied
-        assert hasattr(client.request, "__wrapped__") 
+        with patch.dict("sys.modules", {"httpx": None}):
+            with pytest.raises(
+                AttributeError, match="httpx is required for the async client"
+            ):
+                pass

@@ -1,27 +1,43 @@
 """
-Asynchronous Athena API client implementation.
+Async HTTP client for the Athena API.
 
-This module provides an asynchronous client for the Athena API using httpx.
+This module provides an asynchronous HTTP client for interacting with the Athena API.
+It uses httpx for HTTP requests and provides automatic retry logic, rate limiting,
+and error handling.
 """
 
 import json
 import logging
 from typing import Any, Dict, Optional, Union, cast
-from urllib.parse import urljoin
-
-import backoff  # type: ignore[import-not-found]
 
 try:
     import httpx
 except ImportError as err:
+    raise AttributeError(
+        "httpx is required for the async client. Install with 'pip install httpx'"
+    ) from err
+
+try:
+    import backoff
+except ImportError as err:
     raise ImportError(
-        "httpx is required for the async client. "
-        "Install with 'pip install \"athena-client[async]\"'"
+        "backoff is required for the async client. Install with 'pip install backoff'"
     ) from err
 
 from .auth import build_headers
-from .exceptions import AthenaError, ClientError, NetworkError, ServerError
-from .models import ConceptDetails, ConceptRelationsGraph, ConceptRelationship
+from .exceptions import (
+    AthenaError,
+    ClientError,
+    NetworkError,
+    ServerError,
+)
+from .models import (
+    ConceptDetails,
+    ConceptRelationsGraph,
+    ConceptRelationship,
+    ConceptSearchResponse,
+)
+from .search_result import SearchResult
 from .settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -80,6 +96,23 @@ class AsyncHttpClient:
         # Create httpx client
         self.client = httpx.AsyncClient(timeout=self.timeout)
 
+        # Set up default headers
+        self._setup_default_headers()
+
+    def _setup_default_headers(self) -> None:
+        """Set up default headers for all requests."""
+        # Set default headers similar to the working client
+        default_headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "AthenaOHDSIAPIClient/1.0",
+        }
+
+        # Update client headers
+        self.client.headers.update(default_headers)
+
+        logger.debug("Default headers set: %s", default_headers)
+
     def _build_url(self, path: str) -> str:
         """
         Build full URL by joining base URL and path.
@@ -90,7 +123,27 @@ class AsyncHttpClient:
         Returns:
             Full URL
         """
-        return urljoin(self.base_url, path)
+        # Handle paths that start with / to ensure they're appended correctly
+        if path.startswith("/"):
+            # Remove the leading / and join with base_url
+            path = path[1:]
+
+        # Ensure base_url doesn't end with / and path doesn't start with /
+        if self.base_url.endswith("/"):
+            base = self.base_url[:-1]
+        else:
+            base = self.base_url
+
+        if path.startswith("/"):
+            path = path[1:]
+
+        full_url = f"{base}/{path}"
+
+        logger.debug(
+            f"Building URL: base_url='{self.base_url}', path='{path}' "
+            f"-> full_url='{full_url}'"
+        )
+        return full_url
 
     async def _handle_response(self, response: httpx.Response) -> Dict[str, Any]:
         """
@@ -128,7 +181,7 @@ class AsyncHttpClient:
         except httpx.DecodingError as e:
             raise AthenaError(f"Invalid JSON response: {e}") from e
 
-    @backoff.on_exception(  # type: ignore[misc]
+    @backoff.on_exception(
         backoff.expo,
         (httpx.TimeoutException, httpx.ConnectError),
         max_tries=3,
@@ -317,7 +370,10 @@ class AthenaAsyncClient:
         Returns:
             Raw API response data
         """
-        params: Dict[str, Any] = {"pageSize": page_size, "page": page}
+        # Convert page to start parameter that the API expects
+        start = page * page_size
+
+        params: Dict[str, Any] = {"pageSize": page_size, "start": start}
 
         # Add query if provided
         if query:
@@ -349,6 +405,71 @@ class AthenaAsyncClient:
         # Otherwise use standard GET endpoint
         response = await self.http.get("/concepts", params=params)
         return cast(Dict[str, Any], response)
+
+    async def search(
+        self,
+        query: str = "",
+        size: int = 20,
+        page: int = 0,
+        **kwargs: Any,
+    ) -> SearchResult:
+        """
+        Search for concepts with a SearchResult wrapper.
+
+        Args:
+            query: The search query string
+            size: Number of results per page
+            page: Page number (0-indexed)
+            **kwargs: Additional search parameters
+
+        Returns:
+            SearchResult object with convenient access methods
+        """
+        # Convert size to pageSize for the API
+        search_kwargs: Dict[str, Any] = dict(kwargs)
+        search_kwargs["page_size"] = size
+        search_kwargs["page"] = page
+
+        response_data = await self.search_concepts(query=query, **search_kwargs)
+        response = ConceptSearchResponse.model_validate(response_data)
+        return SearchResult(response, self)
+
+    async def details(self, concept_id: int) -> ConceptDetails:
+        """
+        Get detailed information for a specific concept.
+
+        This is an alias for get_concept_details for compatibility.
+
+        Args:
+            concept_id: The concept ID to get details for
+
+        Returns:
+            ConceptDetails object
+        """
+        return await self.get_concept_details(concept_id)
+
+    async def relationships(
+        self,
+        concept_id: int,
+        only_standard: bool = False,
+        relationship_id: Optional[str] = None,
+    ) -> ConceptRelationship:
+        """
+        Get relationships for a specific concept.
+
+        This is an alias for get_concept_relationships for compatibility.
+
+        Args:
+            concept_id: The concept ID to get relationships for
+            only_standard: Only include standard concepts
+            relationship_id: Filter by relationship type
+
+        Returns:
+            ConceptRelationship object
+        """
+        return await self.get_concept_relationships(
+            concept_id, relationship_id=relationship_id, only_standard=only_standard
+        )
 
     async def get_concept_details(self, concept_id: int) -> ConceptDetails:
         """

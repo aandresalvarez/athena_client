@@ -12,13 +12,13 @@ import pandas as pd
 from .models import Concept, ConceptSearchResponse
 
 if TYPE_CHECKING:
-    from .client import AthenaClient
+    pass
 
 
 class SearchResult:
     """Wrapper for search results that provides convenient access methods."""
 
-    def __init__(self, response: ConceptSearchResponse, client: "AthenaClient") -> None:
+    def __init__(self, response: ConceptSearchResponse, client: Any) -> None:
         """Initialize the search result wrapper.
 
         Args:

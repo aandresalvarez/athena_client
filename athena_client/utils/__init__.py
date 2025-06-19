@@ -1,9 +1,20 @@
 """
 Utility functions for the Athena client.
+
+This module provides various utility functions for the Athena client,
+including progress tracking, query size estimation, and timeout management.
 """
 
 import logging
 from typing import Optional
+
+from .progress import (
+    ProgressTracker,
+    estimate_query_size,
+    format_large_query_warning,
+    get_operation_timeout,
+    progress_context,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,19 +44,10 @@ def configure_logging(level: Optional[int] = None) -> None:
         logger.addHandler(handler)
 
 
-# Export progress utilities
-from .progress import (
-    ProgressTracker,
-    progress_context,
-    estimate_query_size,
-    get_operation_timeout,
-    format_large_query_warning,
-)
-
 __all__ = [
     "configure_logging",
     "ProgressTracker",
-    "progress_context", 
+    "progress_context",
     "estimate_query_size",
     "get_operation_timeout",
     "format_large_query_warning",

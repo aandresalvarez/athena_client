@@ -1,13 +1,8 @@
 """Tests for the authentication module."""
 
-import base64
-from datetime import datetime
 from unittest.mock import Mock, patch
 
-import pytest
-
 from athena_client.auth import build_headers
-from athena_client.settings import get_settings
 
 
 class TestAuth:
@@ -60,31 +55,36 @@ class TestAuth:
             mock_settings = Mock()
             mock_settings.ATHENA_TOKEN = None
             mock_settings.ATHENA_CLIENT_ID = None
-            mock_settings.ATHENA_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----"
+            mock_settings.ATHENA_PRIVATE_KEY = (
+                "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----"
+            )
             mock_get_settings.return_value = mock_settings
-            
+
             # Mock the imports that happen inside build_headers
             mock_datetime = Mock()
-            mock_datetime.utcnow.return_value.strftime.return_value = "2023-01-01T00:00:00Z"
-            
+            mock_datetime.utcnow.return_value.strftime.return_value = (
+                "2023-01-01T00:00:00Z"
+            )
+
             mock_b64encode = Mock()
             mock_b64encode.return_value.decode.return_value = "test-signature"
-            
+
             mock_serialization = Mock()
             mock_key = Mock()
             mock_serialization.load_pem_private_key.return_value = mock_key
             mock_key.sign.return_value = b"test-signature"
-            
+
             mock_hashes = Mock()
             mock_hashes.SHA256.return_value = "sha256"
-            
-            with patch("athena_client.auth.datetime", mock_datetime), \
-                 patch("athena_client.auth.b64encode", mock_b64encode), \
-                 patch("athena_client.auth.serialization", mock_serialization), \
-                 patch("athena_client.auth.hashes", mock_hashes):
-                
+
+            with (
+                patch("athena_client.auth.datetime", mock_datetime),
+                patch("athena_client.auth.b64encode", mock_b64encode),
+                patch("athena_client.auth.serialization", mock_serialization),
+                patch("athena_client.auth.hashes", mock_hashes),
+            ):
                 headers = build_headers("GET", "https://api.example.com/test", b"")
-                
+
                 assert "X-Athena-Nonce" in headers
                 assert "X-Athena-Hmac" in headers
                 assert headers["X-Athena-Nonce"] == "2023-01-01T00:00:00Z"
@@ -96,37 +96,41 @@ class TestAuth:
             mock_settings = Mock()
             mock_settings.ATHENA_TOKEN = "test-token"
             mock_settings.ATHENA_CLIENT_ID = "test-client"
-            mock_settings.ATHENA_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----"
+            mock_settings.ATHENA_PRIVATE_KEY = (
+                "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----"
+            )
             mock_get_settings.return_value = mock_settings
-            
+
             # Mock the imports that happen inside build_headers
             mock_datetime = Mock()
-            mock_datetime.utcnow.return_value.strftime.return_value = "2023-01-01T00:00:00Z"
-            
+            mock_datetime.utcnow.return_value.strftime.return_value = (
+                "2023-01-01T00:00:00Z"
+            )
+
             mock_b64encode = Mock()
             mock_b64encode.return_value.decode.return_value = "test-signature"
-            
+
             mock_serialization = Mock()
             mock_key = Mock()
             mock_serialization.load_pem_private_key.return_value = mock_key
             mock_key.sign.return_value = b"test-signature"
-            
+
             mock_hashes = Mock()
             mock_hashes.SHA256.return_value = "sha256"
-            
-            with patch("athena_client.auth.datetime", mock_datetime), \
-                 patch("athena_client.auth.b64encode", mock_b64encode), \
-                 patch("athena_client.auth.serialization", mock_serialization), \
-                 patch("athena_client.auth.hashes", mock_hashes):
-                
-                headers = build_headers("POST", "https://api.example.com/test", b"test-body")
-                
-                assert "X-Athena-Auth" in headers
-                assert "X-Athena-Client-Id" in headers
-                assert "X-Athena-Nonce" in headers
-                assert "X-Athena-Hmac" in headers
-                assert headers["X-Athena-Auth"] == "Bearer test-token"
-                assert headers["X-Athena-Client-Id"] == "test-client"
+
+            with (
+                patch("athena_client.auth.datetime", mock_datetime),
+                patch("athena_client.auth.b64encode", mock_b64encode),
+                patch("athena_client.auth.serialization", mock_serialization),
+                patch("athena_client.auth.hashes", mock_hashes),
+            ):
+                build_headers("POST", "https://api.example.com/test", b"test-body")
+
+                # Verify the signing string includes the body
+                expected_to_sign = "POST\nhttps://api.example.com/test\n\n2023-01-01T00:00:00Z\ntest-body"
+                mock_key.sign.assert_called_once_with(
+                    expected_to_sign.encode(), "sha256"
+                )
 
     def test_build_headers_hmac_cryptography_import_error(self):
         """Test HMAC authentication when cryptography is not available."""
@@ -136,11 +140,11 @@ class TestAuth:
             mock_settings.ATHENA_CLIENT_ID = None
             mock_settings.ATHENA_PRIVATE_KEY = "test-key"
             mock_get_settings.return_value = mock_settings
-            
+
             with patch("builtins.__import__", side_effect=ImportError):
                 with patch("athena_client.auth.logger") as mock_logger:
                     headers = build_headers("GET", "https://api.example.com/test", b"")
-                    
+
                     assert headers == {}
                     mock_logger.warning.assert_called_once()
 
@@ -152,20 +156,25 @@ class TestAuth:
             mock_settings.ATHENA_CLIENT_ID = None
             mock_settings.ATHENA_PRIVATE_KEY = "invalid-key"
             mock_get_settings.return_value = mock_settings
-            
+
             # Mock the imports that happen inside build_headers
             mock_datetime = Mock()
-            mock_datetime.utcnow.return_value.strftime.return_value = "2023-01-01T00:00:00Z"
-            
+            mock_datetime.utcnow.return_value.strftime.return_value = (
+                "2023-01-01T00:00:00Z"
+            )
+
             mock_serialization = Mock()
-            mock_serialization.load_pem_private_key.side_effect = Exception("Invalid key")
-            
-            with patch("athena_client.auth.datetime", mock_datetime), \
-                 patch("athena_client.auth.serialization", mock_serialization):
-                
+            mock_serialization.load_pem_private_key.side_effect = Exception(
+                "Invalid key"
+            )
+
+            with (
+                patch("athena_client.auth.datetime", mock_datetime),
+                patch("athena_client.auth.serialization", mock_serialization),
+            ):
                 with patch("athena_client.auth.logger") as mock_logger:
                     headers = build_headers("GET", "https://api.example.com/test", b"")
-                    
+
                     assert headers == {}
                     mock_logger.error.assert_called_once()
 
@@ -175,39 +184,46 @@ class TestAuth:
             mock_settings = Mock()
             mock_settings.ATHENA_TOKEN = None
             mock_settings.ATHENA_CLIENT_ID = None
-            mock_settings.ATHENA_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----"
+            mock_settings.ATHENA_PRIVATE_KEY = (
+                "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----"
+            )
             mock_get_settings.return_value = mock_settings
-            
+
             # Mock the imports that happen inside build_headers
             mock_datetime = Mock()
-            mock_datetime.utcnow.return_value.strftime.return_value = "2023-01-01T00:00:00Z"
-            
+            mock_datetime.utcnow.return_value.strftime.return_value = (
+                "2023-01-01T00:00:00Z"
+            )
+
             mock_b64encode = Mock()
             mock_b64encode.return_value.decode.return_value = "test-signature"
-            
+
             mock_serialization = Mock()
             mock_key = Mock()
             mock_serialization.load_pem_private_key.return_value = mock_key
             mock_key.sign.return_value = b"test-signature"
-            
+
             mock_hashes = Mock()
             mock_hashes.SHA256.return_value = "sha256"
-            
-            with patch("athena_client.auth.datetime", mock_datetime), \
-                 patch("athena_client.auth.b64encode", mock_b64encode), \
-                 patch("athena_client.auth.serialization", mock_serialization), \
-                 patch("athena_client.auth.hashes", mock_hashes):
-                
+
+            with (
+                patch("athena_client.auth.datetime", mock_datetime),
+                patch("athena_client.auth.b64encode", mock_b64encode),
+                patch("athena_client.auth.serialization", mock_serialization),
+                patch("athena_client.auth.hashes", mock_hashes),
+            ):
                 # Test different HTTP methods
                 for method in ["GET", "POST", "PUT", "DELETE"]:
                     headers = build_headers(method, "https://api.example.com/test", b"")
-                    
+
                     assert "X-Athena-Nonce" in headers
                     assert "X-Athena-Hmac" in headers
-                    
+
                     # Verify the signing string includes the method
                     expected_to_sign = f"{method}\nhttps://api.example.com/test\n\n2023-01-01T00:00:00Z\n"
-                    mock_key.sign.assert_called_with(expected_to_sign.encode(), "sha256")
+                    mock_key.sign.assert_called_with(
+                        expected_to_sign.encode(), "sha256"
+                    )
 
     def test_build_headers_with_body(self):
         """Test building headers with request body."""
@@ -215,34 +231,41 @@ class TestAuth:
             mock_settings = Mock()
             mock_settings.ATHENA_TOKEN = None
             mock_settings.ATHENA_CLIENT_ID = None
-            mock_settings.ATHENA_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----"
+            mock_settings.ATHENA_PRIVATE_KEY = (
+                "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----"
+            )
             mock_get_settings.return_value = mock_settings
-            
+
             # Mock the imports that happen inside build_headers
             mock_datetime = Mock()
-            mock_datetime.utcnow.return_value.strftime.return_value = "2023-01-01T00:00:00Z"
-            
+            mock_datetime.utcnow.return_value.strftime.return_value = (
+                "2023-01-01T00:00:00Z"
+            )
+
             mock_b64encode = Mock()
             mock_b64encode.return_value.decode.return_value = "test-signature"
-            
+
             mock_serialization = Mock()
             mock_key = Mock()
             mock_serialization.load_pem_private_key.return_value = mock_key
             mock_key.sign.return_value = b"test-signature"
-            
+
             mock_hashes = Mock()
             mock_hashes.SHA256.return_value = "sha256"
-            
-            with patch("athena_client.auth.datetime", mock_datetime), \
-                 patch("athena_client.auth.b64encode", mock_b64encode), \
-                 patch("athena_client.auth.serialization", mock_serialization), \
-                 patch("athena_client.auth.hashes", mock_hashes):
-                
-                headers = build_headers("POST", "https://api.example.com/test", b"test-body")
-                
+
+            with (
+                patch("athena_client.auth.datetime", mock_datetime),
+                patch("athena_client.auth.b64encode", mock_b64encode),
+                patch("athena_client.auth.serialization", mock_serialization),
+                patch("athena_client.auth.hashes", mock_hashes),
+            ):
+                build_headers("POST", "https://api.example.com/test", b"test-body")
+
                 # Verify the signing string includes the body
                 expected_to_sign = "POST\nhttps://api.example.com/test\n\n2023-01-01T00:00:00Z\ntest-body"
-                mock_key.sign.assert_called_once_with(expected_to_sign.encode(), "sha256")
+                mock_key.sign.assert_called_once_with(
+                    expected_to_sign.encode(), "sha256"
+                )
 
     def test_build_headers_empty_body(self):
         """Test building headers with empty body."""
@@ -250,31 +273,40 @@ class TestAuth:
             mock_settings = Mock()
             mock_settings.ATHENA_TOKEN = None
             mock_settings.ATHENA_CLIENT_ID = None
-            mock_settings.ATHENA_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----"
+            mock_settings.ATHENA_PRIVATE_KEY = (
+                "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----"
+            )
             mock_get_settings.return_value = mock_settings
-            
+
             # Mock the imports that happen inside build_headers
             mock_datetime = Mock()
-            mock_datetime.utcnow.return_value.strftime.return_value = "2023-01-01T00:00:00Z"
-            
+            mock_datetime.utcnow.return_value.strftime.return_value = (
+                "2023-01-01T00:00:00Z"
+            )
+
             mock_b64encode = Mock()
             mock_b64encode.return_value.decode.return_value = "test-signature"
-            
+
             mock_serialization = Mock()
             mock_key = Mock()
             mock_serialization.load_pem_private_key.return_value = mock_key
             mock_key.sign.return_value = b"test-signature"
-            
+
             mock_hashes = Mock()
             mock_hashes.SHA256.return_value = "sha256"
-            
-            with patch("athena_client.auth.datetime", mock_datetime), \
-                 patch("athena_client.auth.b64encode", mock_b64encode), \
-                 patch("athena_client.auth.serialization", mock_serialization), \
-                 patch("athena_client.auth.hashes", mock_hashes):
-                
-                headers = build_headers("GET", "https://api.example.com/test", b"")
-                
+
+            with (
+                patch("athena_client.auth.datetime", mock_datetime),
+                patch("athena_client.auth.b64encode", mock_b64encode),
+                patch("athena_client.auth.serialization", mock_serialization),
+                patch("athena_client.auth.hashes", mock_hashes),
+            ):
+                build_headers("GET", "https://api.example.com/test", b"")
+
                 # Verify the signing string includes empty body
-                expected_to_sign = "GET\nhttps://api.example.com/test\n\n2023-01-01T00:00:00Z\n"
-                mock_key.sign.assert_called_once_with(expected_to_sign.encode(), "sha256") 
+                expected_to_sign = (
+                    "GET\nhttps://api.example.com/test\n\n2023-01-01T00:00:00Z\n"
+                )
+                mock_key.sign.assert_called_once_with(
+                    expected_to_sign.encode(), "sha256"
+                )

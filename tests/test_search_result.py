@@ -135,7 +135,7 @@ class TestSearchResult:
         """Set up test fixtures."""
         self.mock_client = Mock()
         self.mock_response = Mock(spec=ConceptSearchResponse)
-        
+
         # Set up default response attributes with correct Concept structure
         self.mock_response.content = [
             Concept(
@@ -163,7 +163,7 @@ class TestSearchResult:
         self.mock_response.last = True
         self.mock_response.facets = {"domain": {"Test": 2}}
         self.mock_response.pageable = None
-        
+
         self.search_result = SearchResult(self.mock_response, self.mock_client)
 
     def test_init(self):
@@ -202,7 +202,7 @@ class TestSearchResult:
         """Test converting to JSON string."""
         # Mock the model_dump_json method
         self.mock_response.model_dump_json.return_value = '{"content": []}'
-        
+
         result = self.search_result.to_json()
         assert result == '{"content": []}'
         self.mock_response.model_dump_json.assert_called_once()
@@ -212,9 +212,9 @@ class TestSearchResult:
         """Test converting to pandas DataFrame successfully."""
         mock_df = Mock()
         mock_pd.DataFrame.return_value = mock_df
-        
+
         result = self.search_result.to_df()
-        
+
         assert result == mock_df
         mock_pd.DataFrame.assert_called_once()
 
@@ -222,16 +222,16 @@ class TestSearchResult:
     def test_to_df_import_error(self, mock_pd):
         """Test converting to DataFrame when pandas is not available."""
         mock_pd.DataFrame.side_effect = ImportError("No module named 'pandas'")
-        
+
         with pytest.raises(ImportError) as exc_info:
             self.search_result.to_df()
-        
+
         assert "pandas is required for DataFrame output" in str(exc_info.value)
 
     def test_next_page_when_last_page(self):
         """Test next_page when on last page."""
         self.mock_response.last = True
-        
+
         result = self.search_result.next_page()
         assert result is None
 
@@ -240,31 +240,29 @@ class TestSearchResult:
         self.mock_response.last = False
         self.mock_response.number = 0
         self.mock_response.size = 20
-        
+
         # Mock the client search method
         mock_next_result = Mock()
         self.mock_client.search.return_value = mock_next_result
-        
+
         result = self.search_result.next_page()
-        
+
         assert result == mock_next_result
-        self.mock_client.search.assert_called_once_with(
-            query="", page=1, size=20
-        )
+        self.mock_client.search.assert_called_once_with(query="", page=1, size=20)
 
     def test_next_page_with_none_values(self):
         """Test next_page when number or size is None."""
         self.mock_response.last = False
         self.mock_response.number = None
         self.mock_response.size = None
-        
+
         result = self.search_result.next_page()
         assert result is None
 
     def test_previous_page_when_first_page(self):
         """Test previous_page when on first page."""
         self.mock_response.first = True
-        
+
         result = self.search_result.previous_page()
         assert result is None
 
@@ -273,31 +271,29 @@ class TestSearchResult:
         self.mock_response.first = False
         self.mock_response.number = 1
         self.mock_response.size = 20
-        
+
         # Mock the client search method
         mock_prev_result = Mock()
         self.mock_client.search.return_value = mock_prev_result
-        
+
         result = self.search_result.previous_page()
-        
+
         assert result == mock_prev_result
-        self.mock_client.search.assert_called_once_with(
-            query="", page=0, size=20
-        )
+        self.mock_client.search.assert_called_once_with(query="", page=0, size=20)
 
     def test_previous_page_with_none_values(self):
         """Test previous_page when number or size is None."""
         self.mock_response.first = False
         self.mock_response.number = None
         self.mock_response.size = None
-        
+
         result = self.search_result.previous_page()
         assert result is None
 
     def test_total_elements_direct_field(self):
         """Test total_elements with direct field."""
         self.mock_response.totalElements = 100
-        
+
         result = self.search_result.total_elements
         assert result == 100
 
@@ -305,7 +301,7 @@ class TestSearchResult:
         """Test total_elements from pageable field."""
         self.mock_response.totalElements = None
         self.mock_response.pageable = {"totalElements": 150}
-        
+
         result = self.search_result.total_elements
         assert result == 150
 
@@ -313,14 +309,14 @@ class TestSearchResult:
         """Test total_elements fallback to content length."""
         self.mock_response.totalElements = None
         self.mock_response.pageable = None
-        
+
         result = self.search_result.total_elements
         assert result == 2  # Length of content
 
     def test_total_pages_direct_field(self):
         """Test total_pages with direct field."""
         self.mock_response.totalPages = 5
-        
+
         result = self.search_result.total_pages
         assert result == 5
 
@@ -328,7 +324,7 @@ class TestSearchResult:
         """Test total_pages calculated from pageable."""
         self.mock_response.totalPages = None
         self.mock_response.pageable = {"totalElements": 100, "pageSize": 20}
-        
+
         result = self.search_result.total_pages
         assert result == 5  # (100 + 20 - 1) // 20 = 5
 
@@ -336,14 +332,14 @@ class TestSearchResult:
         """Test total_pages fallback."""
         self.mock_response.totalPages = None
         self.mock_response.pageable = None
-        
+
         result = self.search_result.total_pages
         assert result == 1
 
     def test_current_page_direct_field(self):
         """Test current_page with direct field."""
         self.mock_response.number = 3
-        
+
         result = self.search_result.current_page
         assert result == 3
 
@@ -351,7 +347,7 @@ class TestSearchResult:
         """Test current_page from pageable field."""
         self.mock_response.number = None
         self.mock_response.pageable = {"pageNumber": 2}
-        
+
         result = self.search_result.current_page
         assert result == 2
 
@@ -359,14 +355,14 @@ class TestSearchResult:
         """Test current_page fallback."""
         self.mock_response.number = None
         self.mock_response.pageable = None
-        
+
         result = self.search_result.current_page
         assert result == 0
 
     def test_page_size_direct_field(self):
         """Test page_size with direct field."""
         self.mock_response.size = 50
-        
+
         result = self.search_result.page_size
         assert result == 50
 
@@ -374,7 +370,7 @@ class TestSearchResult:
         """Test page_size from pageable field."""
         self.mock_response.size = None
         self.mock_response.pageable = {"pageSize": 25}
-        
+
         result = self.search_result.page_size
         assert result == 25
 
@@ -382,7 +378,7 @@ class TestSearchResult:
         """Test page_size fallback to content length."""
         self.mock_response.size = None
         self.mock_response.pageable = None
-        
+
         result = self.search_result.page_size
         assert result == 2  # Length of content
 
@@ -394,7 +390,7 @@ class TestSearchResult:
     def test_facets_none(self):
         """Test getting facets when None."""
         self.mock_response.facets = None
-        
+
         result = self.search_result.facets
         assert result is None
 
@@ -431,16 +427,18 @@ class TestSearchResult:
         self.mock_response.size = 20
         self.mock_response.first = True
         self.mock_response.last = True
-        
+
         empty_result = SearchResult(self.mock_response, self.mock_client)
-        
+
         assert len(empty_result) == 0
         assert empty_result.all() == []
         assert empty_result.top(5) == []
         assert empty_result.total_elements == 0
         assert empty_result.total_pages == 0
         assert empty_result.current_page == 0
-        assert empty_result.page_size == 20  # Should use the size field, not content length
+        assert (
+            empty_result.page_size == 20
+        )  # Should use the size field, not content length
 
     def test_search_result_with_pageable_only(self):
         """Test search result with only pageable information."""
@@ -452,11 +450,11 @@ class TestSearchResult:
             "totalElements": 200,
             "totalPages": 10,
             "pageNumber": 3,
-            "pageSize": 20
+            "pageSize": 20,
         }
-        
+
         result = SearchResult(self.mock_response, self.mock_client)
-        
+
         assert result.total_elements == 200
         assert result.total_pages == 10
         assert result.current_page == 3
@@ -466,17 +464,17 @@ class TestSearchResult:
         """Test search result with edge case values."""
         # Test with None pageable
         self.mock_response.pageable = None
-        
+
         result = SearchResult(self.mock_response, self.mock_client)
-        
+
         # Should use the size field, not content length
         assert result.page_size == 20
-        
+
         # Test with empty pageable
         self.mock_response.pageable = {}
-        
+
         result = SearchResult(self.mock_response, self.mock_client)
-        
+
         # Should use the size field, not content length
         assert result.page_size == 20
 
@@ -490,9 +488,9 @@ class TestSearchResult:
             "totalElements": 100,
             # Missing pageSize
         }
-        
+
         result = SearchResult(self.mock_response, self.mock_client)
-        
+
         # Should fall back to content length for page_size
         assert result.page_size == 2
         # Should calculate total_pages as 1 (fallback)
@@ -508,9 +506,9 @@ class TestSearchResult:
             "pageSize": 25,
             # Missing totalElements
         }
-        
+
         result = SearchResult(self.mock_response, self.mock_client)
-        
+
         # Should use pageable pageSize
         assert result.page_size == 25
         # Should fall back to content length for total_elements

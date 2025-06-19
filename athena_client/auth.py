@@ -5,13 +5,13 @@ This module handles Bearer token and HMAC authentication for the Athena API.
 """
 
 import logging
-from typing import Any, Dict
-
-from .settings import get_settings
-
 from base64 import b64encode
 from datetime import datetime
+from typing import Any, Dict
+
 from cryptography.hazmat.primitives import hashes, serialization
+
+from .settings import get_settings
 
 logger = logging.getLogger(__name__)
 
