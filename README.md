@@ -651,9 +651,40 @@ athena = Athena(timeout=60)  # Increase timeout for complex operations
 ✅ **Progress tracking** with ETA for long operations  
 ✅ **User-friendly warnings** for potentially large queries  
 ✅ **Smart pagination** with automatic validation  
-✅ **Enhanced error messages** with specific suggestions  
-✅ **Memory-efficient processing** for large result sets  
-✅ **Configurable thresholds** for different query types  
+✅ **Enhanced error messages** with specific suggestions
+✅ **Memory-efficient processing** for large result sets
+✅ **Configurable thresholds** for different query types
+
+## Generating Validated Concept Sets
+
+Concept set generation bridges the gap between the Athena API and your local OMOP vocabulary.
+It validates concepts found via the API against your database, optionally expanding the set with
+descendants. The returned metadata explains which strategy was used and lists any warnings.
+
+```python
+import asyncio
+from athena_client import Athena
+
+async def main() -> None:
+    client = Athena()
+    concept_set = await client.generate_concept_set(
+        "type 2 diabetes",
+        db_connection_string="postgresql://user:pass@localhost/omop",
+    )
+    print(concept_set)
+
+asyncio.run(main())
+```
+
+Command line usage:
+
+```bash
+athena generate-set "type 2 diabetes" \
+  --db-connection postgresql://user:pass@localhost/omop --output json
+```
+
+The `metadata` field indicates the strategy applied (e.g., `Tier 1: Direct Standard Concept`) and
+any warnings encountered.
 
 ## CLI Usage
 

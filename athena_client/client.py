@@ -8,7 +8,9 @@ import logging
 import time
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
+from .async_client import AthenaAsyncClient
 from .db.base import DatabaseConnector
+from .db.sqlalchemy_connector import SQLAlchemyConnector
 from .exceptions import APIError, AthenaError
 from .http import HttpClient
 from .models import (
@@ -641,6 +643,33 @@ class AthenaClient:
                 summary["graph"] = {"error": str(e)}
 
         return summary
+
+    async def generate_concept_set(
+        self,
+        query: str,
+        db_connection_string: str,
+        strategy: str = "fallback",
+        include_descendants: bool = True,
+        confidence_threshold: float = 0.7,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Generate a validated concept set using the async client."""
+
+        async_client = AthenaAsyncClient(
+            base_url=self.http.base_url,
+            token=str(self.http.session.headers.get("Authorization", "")),
+        )
+
+        db_connector = SQLAlchemyConnector.from_connection_string(db_connection_string)
+        async_client.set_database_connector(db_connector)
+
+        return await async_client.generate_concept_set(
+            query,
+            strategy=strategy,
+            include_descendants=include_descendants,
+            confidence_threshold=confidence_threshold,
+            **kwargs,
+        )
 
 
 class Athena(AthenaClient):

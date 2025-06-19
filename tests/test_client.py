@@ -2,8 +2,9 @@
 Tests for the AthenaClient class and its enhanced functionality.
 """
 
+import asyncio
 import os
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -1355,3 +1356,44 @@ class TestDatabaseIntegration:
         client = AthenaClient()
         with pytest.raises(RuntimeError):
             client.validate_local_concepts([1])
+
+    @patch("athena_client.client.SQLAlchemyConnector")
+    @patch("athena_client.client.AthenaAsyncClient")
+    def test_generate_concept_set_facade(
+        self,
+        mock_async_client_class: Mock,
+        mock_connector_class: Mock,
+    ) -> None:
+        expected = {"concept_ids": [1], "metadata": {"status": "SUCCESS"}}
+
+        mock_async_client = Mock()
+        mock_async_client.generate_concept_set = AsyncMock(return_value=expected)
+        mock_async_client.set_database_connector = Mock()
+        mock_async_client_class.return_value = mock_async_client
+
+        mock_connector = Mock()
+        mock_connector_class.from_connection_string.return_value = mock_connector
+
+        client = AthenaClient()
+
+        result = asyncio.run(
+            client.generate_concept_set(
+                "test", "sqlite:///db", strategy="strict", include_descendants=False
+            )
+        )
+
+        mock_async_client_class.assert_called_once_with(
+            base_url=client.http.base_url,
+            token=str(client.http.session.headers.get("Authorization", "")),
+        )
+        mock_connector_class.from_connection_string.assert_called_once_with(
+            "sqlite:///db"
+        )
+        mock_async_client.set_database_connector.assert_called_once_with(mock_connector)
+        mock_async_client.generate_concept_set.assert_awaited_once_with(
+            "test",
+            strategy="strict",
+            include_descendants=False,
+            confidence_threshold=0.7,
+        )
+        assert result == expected

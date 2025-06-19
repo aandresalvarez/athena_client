@@ -2,7 +2,7 @@
 
 import json
 import sys
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -374,3 +374,79 @@ class TestCLI:
             with patch("builtins.print") as mock_print:
                 _format_output(data, "pretty", None)
                 mock_print.assert_called()
+
+    def test_generate_set_command_success(self) -> None:
+        import importlib
+
+        import athena_client.cli as cli_module
+        cli_module = importlib.reload(cli_module)
+
+        mock_client = Mock()
+        mock_client.generate_concept_set = AsyncMock(
+            return_value={"concept_ids": [1], "metadata": {"status": "SUCCESS"}}
+        )
+
+        with patch.object(
+            cli_module, "_create_client", return_value=mock_client
+        ) as mock_create_client, patch.object(
+            cli_module, "_format_output"
+        ) as mock_format_output, patch(
+            "athena_client.cli.asyncio.run",
+            return_value={
+                "concept_ids": [1],
+                "metadata": {"status": "SUCCESS", "strategy_used": "Tier 1"},
+            },
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli_module.cli,
+                ["--output", "json", "generate-set", "diabetes", "--db-connection", "sqlite:///db"],
+            )
+
+        assert result.exit_code == 0
+        mock_format_output.assert_called_once()
+        mock_create_client.assert_called_once()
+        mock_client.generate_concept_set.assert_called_once()
+
+    def test_generate_set_command_failure(self) -> None:
+        import importlib
+
+        import athena_client.cli as cli_module
+        cli_module = importlib.reload(cli_module)
+
+        mock_client = Mock()
+        mock_client.generate_concept_set = AsyncMock(
+            return_value={
+                "concept_ids": [],
+                "metadata": {"status": "FAILURE", "reason": "bad"},
+            }
+        )
+
+        with patch.object(
+            cli_module, "_create_client", return_value=mock_client
+        ) as mock_create_client, patch.object(
+            cli_module, "_format_output"
+        ) as mock_format_output, patch(
+            "athena_client.cli.asyncio.run",
+            return_value={
+                "concept_ids": [],
+                "metadata": {"status": "FAILURE", "reason": "bad"},
+            },
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli_module.cli,
+                ["--output", "json", "generate-set", "term", "--db-connection", "sqlite:///db"],
+            )
+
+        assert result.exit_code == 0
+        mock_format_output.assert_called_once()
+        mock_create_client.assert_called_once()
+        assert "Failure:" in result.stderr
+
+    def test_generate_set_command_missing_db(self):
+        """Missing --db-connection option."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["generate-set", "test"], catch_exceptions=False)
+        assert result.exit_code != 0
+        assert "Missing option '--db-connection'" in result.output
