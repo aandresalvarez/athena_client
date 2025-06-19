@@ -25,12 +25,10 @@ except ImportError as err:
     ) from err
 
 from .auth import build_headers
-from .exceptions import (
-    AthenaError,
-    ClientError,
-    NetworkError,
-    ServerError,
-)
+from .concept_explorer import create_concept_explorer
+from .concept_set import ConceptSetGenerator
+from .db.base import DatabaseConnector
+from .exceptions import AthenaError, ClientError, NetworkError, ServerError
 from .models import (
     ConceptDetails,
     ConceptRelationsGraph,
@@ -63,6 +61,7 @@ class AsyncHttpClient:
         timeout: Optional[int] = None,
         max_retries: Optional[int] = None,
         backoff_factor: Optional[float] = None,
+        db_connector: Optional[DatabaseConnector] = None,
     ) -> None:
         """
         Initialize the async HTTP client with configuration.
@@ -314,6 +313,7 @@ class AthenaAsyncClient:
         timeout: Optional[int] = None,
         max_retries: Optional[int] = None,
         backoff_factor: Optional[float] = None,
+        db_connector: Optional[DatabaseConnector] = None,
     ) -> None:
         """
         Initialize the async Athena client with configuration.
@@ -326,6 +326,7 @@ class AthenaAsyncClient:
             timeout: HTTP timeout in seconds
             max_retries: Maximum number of retry attempts
             backoff_factor: Exponential backoff factor for retries
+            db_connector: Optional database connector for local OMOP validation
         """
         self.http = AsyncHttpClient(
             base_url=base_url,
@@ -336,6 +337,12 @@ class AthenaAsyncClient:
             max_retries=max_retries,
             backoff_factor=backoff_factor,
         )
+        self.db_connector = db_connector
+
+    def set_database_connector(self, connector: DatabaseConnector) -> None:
+        """Set the database connector for this client."""
+
+        self.db_connector = connector
 
     async def search_concepts(
         self,
@@ -538,3 +545,14 @@ class AthenaAsyncClient:
         )
         data = cast(Dict[str, Any], response)
         return ConceptRelationsGraph.model_validate(data)
+
+    async def generate_concept_set(self, query: str, **kwargs: Any) -> Dict[str, Any]:
+        """Generate a validated concept set from a search query."""
+
+        if not self.db_connector:
+            raise RuntimeError("A database connector has not been configured.")
+
+        explorer = create_concept_explorer(self)
+        generator = ConceptSetGenerator(explorer=explorer, db=self.db_connector)
+
+        return await generator.create_from_query(query, **kwargs)

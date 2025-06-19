@@ -28,6 +28,25 @@ class SQLAlchemyConnector:
 
         return validated_ids
 
+    def get_descendants(self, concept_ids: List[int]) -> List[int]:
+        """Retrieve descendant concept IDs for the given ancestors."""
+        if not concept_ids:
+            return []
+
+        stmt = text(
+            """
+                SELECT descendant_concept_id
+                FROM concept_ancestor
+                WHERE ancestor_concept_id IN :ids
+                """
+        ).bindparams(bindparam("ids", expanding=True))
+
+        with self._engine.connect() as connection:
+            result = connection.execute(stmt, {"ids": list(concept_ids)})
+            descendant_ids = [row[0] for row in result]
+
+        return list(set(descendant_ids) - set(concept_ids))
+
     @staticmethod
     def from_connection_string(connection_string: str) -> "SQLAlchemyConnector":
         engine = create_engine(connection_string)

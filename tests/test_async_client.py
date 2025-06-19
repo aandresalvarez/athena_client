@@ -429,3 +429,10 @@ class TestAthenaAsyncClient:
                 import importlib
 
                 importlib.import_module("athena_client.async_client")
+
+    @pytest.mark.asyncio
+    async def test_generate_concept_set_without_db(self):
+        client = AthenaAsyncClient()
+
+        with pytest.raises(RuntimeError):
+            await client.generate_concept_set("test")
