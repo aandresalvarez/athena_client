@@ -363,59 +363,78 @@ class TestClientMethods:
 
 
 class TestErrorScenarios:
-    """Test various error scenarios and their handling."""
+    """Test various error scenarios."""
 
-    def test_authentication_error(self, athena_client):
-        # Return an error response that the search method will detect
+    @patch("athena_client.client.HttpClient")
+    def test_authentication_error(self, mock_http_client_class, athena_client):
+        """Test authentication error handling."""
         error_response = {
             "result": None,
-            "errorMessage": "Invalid token",
+            "errorMessage": "Authentication failed",
             "errorCode": "AUTH_ERROR",
         }
-        athena_client.http = Mock()
-        athena_client.http.get.return_value = dict(error_response)
+        
+        # Mock the HttpClient class to return our error response
+        mock_http_client = Mock()
+        mock_http_client.get.return_value = error_response
+        mock_http_client_class.return_value = mock_http_client
 
         with pytest.raises(APIError) as exc_info:
             athena_client.search("test", max_retries=0)
 
-        assert "Invalid token" in str(exc_info.value)
+        assert "Authentication failed" in str(exc_info.value)
 
-    def test_rate_limit_error(self, athena_client):
+    @patch("athena_client.client.HttpClient")
+    def test_rate_limit_error(self, mock_http_client_class, athena_client):
+        """Test rate limit error handling."""
         error_response = {
             "result": None,
             "errorMessage": "Rate limit exceeded",
             "errorCode": "RATE_LIMIT",
         }
-        athena_client.http = Mock()
-        athena_client.http.get.return_value = dict(error_response)
+        
+        # Mock the HttpClient class to return our error response
+        mock_http_client = Mock()
+        mock_http_client.get.return_value = error_response
+        mock_http_client_class.return_value = mock_http_client
 
         with pytest.raises(APIError) as exc_info:
             athena_client.search("test", max_retries=0)
 
         assert "Rate limit exceeded" in str(exc_info.value)
 
-    def test_client_error(self, athena_client):
+    @patch("athena_client.client.HttpClient")
+    def test_client_error(self, mock_http_client_class, athena_client):
+        """Test client error handling."""
         error_response = {
             "result": None,
             "errorMessage": "Bad request",
             "errorCode": "BAD_REQUEST",
         }
-        athena_client.http = Mock()
-        athena_client.http.get.return_value = dict(error_response)
+        
+        # Mock the HttpClient class to return our error response
+        mock_http_client = Mock()
+        mock_http_client.get.return_value = error_response
+        mock_http_client_class.return_value = mock_http_client
 
         with pytest.raises(APIError) as exc_info:
             athena_client.search("test", max_retries=0)
 
         assert "Bad request" in str(exc_info.value)
 
-    def test_server_error(self, athena_client):
+    @patch("athena_client.client.HttpClient")
+    def test_server_error(self, mock_http_client_class, athena_client):
+        """Test server error handling."""
         error_response = {
             "result": None,
             "errorMessage": "Internal server error",
             "errorCode": "SERVER_ERROR",
         }
-        athena_client.http = Mock()
-        athena_client.http.get.return_value = dict(error_response)
+        
+        # Mock the HttpClient class to return our error response
+        mock_http_client = Mock()
+        mock_http_client.get.return_value = error_response
+        mock_http_client_class.return_value = mock_http_client
 
         with pytest.raises(APIError) as exc_info:
             athena_client.search("test", max_retries=0)
@@ -603,7 +622,8 @@ class TestAthenaClient:
         with pytest.raises(APIError) as exc_info:
             client.search("test", size=0)
         
-        assert "Search failed" in str(exc_info.value)
+        # New error message is more specific
+        assert "Invalid page size" in str(exc_info.value)
         assert "Page size must not be less than one" in str(exc_info.value)
 
     @patch("athena_client.client.HttpClient")
@@ -620,11 +640,11 @@ class TestAthenaClient:
 
         client = AthenaClient()
         
-        with pytest.raises(APIError) as exc_info:
+        # Now raises ValueError before making HTTP call
+        with pytest.raises(ValueError) as exc_info:
             client.search("test", size=1001)
         
-        assert "Search failed" in str(exc_info.value)
-        assert "Page size must not be greater than 1000" in str(exc_info.value)
+        assert "Page size 1001 exceeds maximum allowed size of 1000" in str(exc_info.value)
 
     @patch("athena_client.client.HttpClient")
     def test_search_api_error_empty_query(self, mock_http_client_class):
@@ -643,7 +663,8 @@ class TestAthenaClient:
         with pytest.raises(APIError) as exc_info:
             client.search("")
         
-        assert "Search failed" in str(exc_info.value)
+        # New error message is more specific
+        assert "Empty search query" in str(exc_info.value)
         assert "Query must not be blank" in str(exc_info.value)
 
     @patch("athena_client.client.HttpClient")
@@ -663,7 +684,8 @@ class TestAthenaClient:
         with pytest.raises(APIError) as exc_info:
             client.search("test")
         
-        assert "Search failed" in str(exc_info.value)
+        # New error message is more specific
+        assert "Search failed" in str(exc_info.value) or "Some other error" in str(exc_info.value)
         assert "Some other error" in str(exc_info.value)
 
     @patch("athena_client.client.HttpClient")

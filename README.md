@@ -181,6 +181,144 @@ except RetryFailedError as e:
 ✅ **User-friendly language** (not technical jargon)  
 ✅ **Automatic retry** for recoverable errors
 
+## Enhanced Large Query Handling
+
+The athena-client provides intelligent handling for large queries with enhanced timeouts, progress tracking, and user-friendly error messages.
+
+### Intelligent Timeout Management
+
+Different operations use optimized timeouts based on query complexity:
+
+```python
+from athena_client import Athena
+
+# Default timeouts are automatically adjusted based on query size
+athena = Athena()
+
+# Small queries: 30s timeout
+results = athena.search("aspirin 325mg tablet")
+
+# Large queries: 45s+ timeout (auto-adjusted)
+results = athena.search("pain")  # Estimated 5000+ results
+
+# Complex graphs: 60s+ timeout
+graph = athena.graph(concept_id, depth=3, zoom_level=3)
+```
+
+### Progress Tracking for Long Operations
+
+Large queries automatically show progress bars with ETA:
+
+```python
+# Progress tracking is enabled by default for large queries
+results = athena.search("diabetes", size=100)
+# Shows: Searching for 'diabetes': [██████████████████████████████] 100.0% (100/100) 2.3s
+
+# Disable progress tracking if needed
+results = athena.search("diabetes", show_progress=False)
+```
+
+### User-Friendly Warnings
+
+The client warns about potentially large queries:
+
+```python
+results = athena.search("pain")
+# Output:
+# ⚠️  Large query detected: 'pain' (estimated 5,000+ results)
+# 💡 Suggestions:
+#    • Add more specific terms to narrow results
+#    • Use domain or vocabulary filters
+#    • Consider using smaller page sizes
+#    • This query may take several minutes to complete
+```
+
+### Smart Pagination
+
+Enhanced pagination with automatic validation and optimization:
+
+```python
+# Automatic page size validation
+try:
+    results = athena.search("aspirin", size=2000)  # Too large
+except ValueError as e:
+    print(e)  # "Page size 2000 exceeds maximum allowed size of 1000"
+
+# Smart defaults based on query size
+results = athena.search("pain")  # Uses smaller page size for large queries
+```
+
+### Enhanced Error Messages for Large Queries
+
+Specific error messages for timeout and complexity issues:
+
+```python
+try:
+    results = athena.search("very broad search term")
+except APIError as e:
+    print(e)
+    # Output:
+    # Search timeout: The query 'very broad search term' is taking too long to process.
+    # Try:
+    # • Using more specific search terms
+    # • Adding domain or vocabulary filters
+    # • Reducing the page size
+    # • Breaking the query into smaller parts
+```
+
+### Configuration for Large Queries
+
+Fine-tune large query behavior:
+
+```python
+from athena_client.settings import get_settings
+
+settings = get_settings()
+
+# Timeout configuration
+settings.ATHENA_SEARCH_TIMEOUT_SECONDS = 60      # Search operations
+settings.ATHENA_GRAPH_TIMEOUT_SECONDS = 90       # Graph operations
+settings.ATHENA_RELATIONSHIPS_TIMEOUT_SECONDS = 60  # Relationship queries
+
+# Pagination configuration
+settings.ATHENA_DEFAULT_PAGE_SIZE = 50           # Default page size
+settings.ATHENA_MAX_PAGE_SIZE = 1000             # Maximum page size
+settings.ATHENA_LARGE_QUERY_THRESHOLD = 100      # Threshold for "large" queries
+
+# Progress configuration
+settings.ATHENA_SHOW_PROGRESS = True             # Enable progress tracking
+settings.ATHENA_PROGRESS_UPDATE_INTERVAL = 2.0   # Update interval (seconds)
+```
+
+### Large Query Best Practices
+
+```python
+# 1. Use specific search terms
+results = athena.search("acute myocardial infarction")  # Better than "heart attack"
+
+# 2. Add filters to narrow results
+results = athena.search("diabetes", domain="Condition", vocabulary="SNOMED")
+
+# 3. Use smaller page sizes for large queries
+results = athena.search("pain", size=20)  # Instead of 100
+
+# 4. Enable progress tracking for visibility
+results = athena.search("cancer", show_progress=True)
+
+# 5. Monitor and adjust timeout settings
+athena = Athena(timeout=60)  # Increase timeout for complex operations
+```
+
+### Large Query Features
+
+✅ **Automatic timeout adjustment** based on query complexity  
+✅ **Progress tracking** with ETA for long operations  
+✅ **User-friendly warnings** for potentially large queries  
+✅ **Smart pagination** with automatic validation  
+✅ **Enhanced error messages** with specific suggestions  
+✅ **Memory-efficient processing** for large result sets  
+✅ **Configurable thresholds** for different query types  
+
 ## CLI Usage
 
 ```bash

@@ -31,3 +31,22 @@ def configure_logging(level: Optional[int] = None) -> None:
         handler.setFormatter(formatter)
 
         logger.addHandler(handler)
+
+
+# Export progress utilities
+from .progress import (
+    ProgressTracker,
+    progress_context,
+    estimate_query_size,
+    get_operation_timeout,
+    format_large_query_warning,
+)
+
+__all__ = [
+    "configure_logging",
+    "ProgressTracker",
+    "progress_context", 
+    "estimate_query_size",
+    "get_operation_timeout",
+    "format_large_query_warning",
+]

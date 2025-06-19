@@ -85,6 +85,7 @@ class AthenaClient:
         auto_retry: bool = True,
         max_retries: Optional[int] = None,
         retry_delay: Optional[float] = None,
+        show_progress: Optional[bool] = None,
         **kwargs: Any,
     ) -> SearchResult:
         """
@@ -97,6 +98,7 @@ class AthenaClient:
             auto_retry: Whether to automatically retry on recoverable errors
             max_retries: Override max retries for this call
             retry_delay: Override retry delay for this call
+            show_progress: Whether to show progress for large queries
             **kwargs: Additional search parameters
 
         Returns:
@@ -110,11 +112,37 @@ class AthenaClient:
         import time
 
         from .exceptions import RetryFailedError
+        from .utils import (
+            estimate_query_size,
+            get_operation_timeout,
+            format_large_query_warning,
+            progress_context,
+        )
+        from .settings import get_settings
+
+        settings = get_settings()
 
         if isinstance(query, Q):
             query_str = str(query)
         else:
             query_str = query
+
+        # Estimate query size and provide warnings for large queries
+        estimated_size = estimate_query_size(query_str)
+        warning = format_large_query_warning(query_str, estimated_size)
+        if warning:
+            print(warning)
+
+        # Use settings default page size if not specified
+        if size == 20 and 'pageSize' not in kwargs:
+            size = settings.ATHENA_DEFAULT_PAGE_SIZE
+
+        # Validate page size
+        if size > settings.ATHENA_MAX_PAGE_SIZE:
+            raise ValueError(
+                f"Page size {size} exceeds maximum allowed size of "
+                f"{settings.ATHENA_MAX_PAGE_SIZE}. Please use a smaller page size."
+            )
 
         # Convert page/size to pageSize/start parameters that the API expects
         page_size = size
@@ -138,95 +166,123 @@ class AthenaClient:
             retry_delay if retry_delay is not None else self.retry_delay
         )
 
+        # Get appropriate timeout for this operation
+        operation_timeout = get_operation_timeout('search', estimated_size)
+        
+        # Determine if we should show progress
+        should_show_progress = (
+            show_progress if show_progress is not None 
+            else settings.ATHENA_SHOW_PROGRESS
+        )
+
         # Track retry history for detailed error reporting
         retry_history = []
 
-        for attempt in range(max_attempts):
-            try:
-                response = self.http.get("/concepts", params=params)
+        # Use progress context for large queries
+        progress_kwargs = {}
+        if should_show_progress and estimated_size > settings.ATHENA_LARGE_QUERY_THRESHOLD:
+            progress_kwargs = {
+                'total': min(estimated_size, page_size),
+                'description': f"Searching for '{query_str[:30]}{'...' if len(query_str) > 30 else ''}'",
+                'show_progress': True,
+                'update_interval': settings.ATHENA_PROGRESS_UPDATE_INTERVAL,
+            }
 
-                # Raise APIError for any error response with errorMessage and errorCode
-                if (
-                    isinstance(response, dict)
-                    and response.get("result") is None
-                    and "errorMessage" in response
-                    and "errorCode" in response
-                ):
-                    error_msg = response.get("errorMessage", "Unknown API error")
-                    error_code = response.get("errorCode")
-                    raise APIError(
-                        f"Search failed: {error_msg}",
-                        api_error_code=error_code,
-                        api_message=error_msg,
+        with progress_context(**progress_kwargs) if progress_kwargs else nullcontext():
+            for attempt in range(max_attempts):
+                try:
+                    # Create a temporary HTTP client with the appropriate timeout
+                    temp_http = HttpClient(
+                        base_url=self.http.base_url,
+                        token=self.http.session.headers.get('Authorization'),
+                        timeout=operation_timeout,
+                        max_retries=1,  # We handle retries manually
+                        enable_throttling=self.http.enable_throttling,
+                        throttle_delay_range=self.http.throttle_delay_range,
                     )
 
-                # Existing special cases (now redundant, but kept for clarity)
-                if (
-                    isinstance(response, dict)
-                    and response.get("result") is None
-                    and "errorMessage" in response
-                ):
-                    error_msg = response.get("errorMessage", "Unknown API error")
-                    error_code = response.get("errorCode")
+                    response = temp_http.get("/concepts", params=params)
 
-                    if "Page size must not be less than one" in error_msg:
-                        raise APIError(
-                            f"Invalid page size: {error_msg}. "
-                            f"Please use a page size of 1 or greater.",
-                            api_error_code=error_code,
-                            api_message=error_msg,
+                    # Raise APIError for any error response with errorMessage and errorCode
+                    if (
+                        isinstance(response, dict)
+                        and response.get("result") is None
+                        and "errorMessage" in response
+                        and "errorCode" in response
+                    ):
+                        error_msg = response.get("errorMessage", "Unknown API error")
+                        error_code = response.get("errorCode")
+                        
+                        # Enhanced error messages for large queries
+                        if "timeout" in error_msg.lower():
+                            raise APIError(
+                                f"Search timeout: The query '{query_str}' is taking too long to process. "
+                                f"Try:\n"
+                                f"• Using more specific search terms\n"
+                                f"• Adding domain or vocabulary filters\n"
+                                f"• Reducing the page size\n"
+                                f"• Breaking the query into smaller parts",
+                                api_error_code=error_code,
+                                api_message=error_msg,
+                            )
+                        elif "Page size must not be less than one" in error_msg:
+                            raise APIError(
+                                f"Invalid page size: {error_msg}. "
+                                f"Please use a page size of 1 or greater.",
+                                api_error_code=error_code,
+                                api_message=error_msg,
+                            )
+                        elif "Page size must not be greater than" in error_msg:
+                            raise APIError(
+                                f"Page size too large: {error_msg}. "
+                                f"Please reduce the page size to {settings.ATHENA_MAX_PAGE_SIZE} or less.",
+                                api_error_code=error_code,
+                                api_message=error_msg,
+                            )
+                        elif "Query must not be blank" in error_msg:
+                            raise APIError(
+                                f"Empty search query: {error_msg}. "
+                                f"Please provide a search term.",
+                                api_error_code=error_code,
+                                api_message=error_msg,
+                            )
+                        else:
+                            raise APIError(
+                                f"Search failed: {error_msg}",
+                                api_error_code=error_code,
+                                api_message=error_msg,
+                            )
+
+                    search_response = ConceptSearchResponse.model_validate(response)
+                    return SearchResult(search_response, self)
+
+                except Exception as e:
+                    if isinstance(e, APIError):
+                        # API errors are not retryable, raise immediately
+                        raise
+
+                    # For network errors, retry if we have attempts left
+                    if attempt < max_attempts - 1:
+                        # For other errors, retry if we have attempts left
+                        retry_history.append(e)
+                        if retry_delay_seconds is not None:
+                            time.sleep(retry_delay_seconds)
+
+                        # Log retry attempt
+                        logger.info(
+                            f"Retrying search due to {type(e).__name__} "
+                            f"(attempt {attempt + 1}/{max_attempts}): {e}"
                         )
-                    elif "Page size must not be greater than" in error_msg:
-                        raise APIError(
-                            f"Page size too large: {error_msg}. "
-                            f"Please reduce the page size.",
-                            api_error_code=error_code,
-                            api_message=error_msg,
-                        )
-                    elif "Query must not be blank" in error_msg:
-                        raise APIError(
-                            f"Empty search query: {error_msg}. "
-                            f"Please provide a search term.",
-                            api_error_code=error_code,
-                            api_message=error_msg,
-                        )
+                        continue
                     else:
-                        raise APIError(
-                            f"Search failed: {error_msg}",
-                            api_error_code=error_code,
-                            api_message=error_msg,
-                        )
-
-                search_response = ConceptSearchResponse.model_validate(response)
-                return SearchResult(search_response, self)
-
-            except Exception as e:
-                if isinstance(e, APIError):
-                    # API errors are not retryable, raise immediately
-                    raise
-
-                # For network errors, retry if we have attempts left
-                if attempt < max_attempts - 1:
-                    # For other errors, retry if we have attempts left
-                    retry_history.append(e)
-                    if retry_delay_seconds is not None:
-                        time.sleep(retry_delay_seconds)
-
-                    # Log retry attempt
-                    logger.info(
-                        f"Retrying search due to {type(e).__name__} "
-                        f"(attempt {attempt + 1}/{max_attempts}): {e}"
-                    )
-                    continue
-                else:
-                    # Final attempt failed, raise with retry history
-                    raise RetryFailedError(
-                        f"Search failed after {max_attempts} attempts",
-                        retry_history=retry_history,
-                        max_attempts=max_attempts,
-                        last_error=e,
-                    ) from e
-        raise RuntimeError("Unreachable code in search")
+                        # Final attempt failed, raise with retry history
+                        raise RetryFailedError(
+                            f"Search failed after {max_attempts} attempts",
+                            retry_history=retry_history,
+                            max_attempts=max_attempts,
+                            last_error=e,
+                        ) from e
+            raise RuntimeError("Unreachable code in search")
 
     def details(self, concept_id: int, auto_retry: bool = True) -> ConceptDetails:
         """
@@ -384,6 +440,7 @@ class AthenaClient:
         depth: int = 2,
         zoom_level: int = 2,
         auto_retry: bool = True,
+        show_progress: Optional[bool] = None,
         **kwargs: Any,
     ) -> ConceptRelationsGraph:
         """
@@ -394,6 +451,7 @@ class AthenaClient:
             depth: Graph depth
             zoom_level: Zoom level
             auto_retry: Whether to automatically retry on recoverable errors
+            show_progress: Whether to show progress for large graph operations
             **kwargs: Additional parameters
 
         Returns:
@@ -404,6 +462,19 @@ class AthenaClient:
             Network errors are automatically retried, and API errors provide
             clear, actionable messages without requiring try-catch blocks.
         """
+        from .utils import get_operation_timeout, progress_context
+        from .settings import get_settings
+
+        settings = get_settings()
+
+        # Estimate graph complexity based on depth and zoom level
+        estimated_complexity = depth * zoom_level * 100  # Rough estimate
+        
+        # Provide warning for complex graphs
+        if depth > 3 or zoom_level > 3:
+            print(f"⚠️  Complex graph request: depth={depth}, zoom_level={zoom_level}")
+            print("💡 This may take several minutes to complete. Consider reducing depth or zoom level.")
+
         params = {
             "depth": depth,
             "zoomLevel": zoom_level,
@@ -412,63 +483,105 @@ class AthenaClient:
 
         max_attempts = 3 if auto_retry else 1
 
-        for attempt in range(max_attempts):
-            try:
-                response = self.http.get(
-                    f"/concepts/{concept_id}/relations", params=params
-                )
+        # Get appropriate timeout for graph operations
+        operation_timeout = get_operation_timeout('graph', estimated_complexity)
+        
+        # Determine if we should show progress
+        should_show_progress = (
+            show_progress if show_progress is not None 
+            else settings.ATHENA_SHOW_PROGRESS
+        )
 
-                # Check if the response is an error response
-                if (
-                    isinstance(response, dict)
-                    and response.get("result") is None
-                    and "errorMessage" in response
-                ):
-                    error_msg = response.get("errorMessage", "Unknown API error")
-                    error_code = response.get("errorCode")
+        # Use progress context for complex graphs
+        progress_kwargs = {}
+        if should_show_progress and estimated_complexity > 500:
+            progress_kwargs = {
+                'total': estimated_complexity,
+                'description': f"Building graph for concept {concept_id} (depth={depth}, zoom={zoom_level})",
+                'show_progress': True,
+                'update_interval': settings.ATHENA_PROGRESS_UPDATE_INTERVAL,
+            }
 
-                    # Provide more specific error messages for graph
-                    if "Unable to find" in error_msg and "ConceptV5" in error_msg:
-                        raise APIError(
-                            f"Concept not found: Concept ID {concept_id} "
-                            f"does not exist in the database. "
-                            f"Please verify the concept ID is correct.",
-                            api_error_code=error_code,
-                            api_message=error_msg,
-                        )
-                    else:
-                        raise APIError(
-                            f"Failed to get concept graph: {error_msg}",
-                            api_error_code=error_code,
-                            api_message=error_msg,
-                        )
-
-                return ConceptRelationsGraph.model_validate(response)
-
-            except Exception as e:
-                if isinstance(e, APIError):
-                    # API errors are not retryable, raise immediately
-                    raise
-                elif attempt < max_attempts - 1:
-                    # For other errors, retry if we have attempts left
-                    logger.info(
-                        f"Retrying graph due to error "
-                        f"(attempt {attempt + 1}/{max_attempts}): {e}"
+        with progress_context(**progress_kwargs) if progress_kwargs else nullcontext():
+            for attempt in range(max_attempts):
+                try:
+                    # Create a temporary HTTP client with the appropriate timeout
+                    temp_http = HttpClient(
+                        base_url=self.http.base_url,
+                        token=self.http.session.headers.get('Authorization'),
+                        timeout=operation_timeout,
+                        max_retries=1,  # We handle retries manually
+                        enable_throttling=self.http.enable_throttling,
+                        throttle_delay_range=self.http.throttle_delay_range,
                     )
-                    continue
-                else:
-                    # Final attempt failed, raise with enhanced message
-                    raise AthenaError(
-                        f"Failed to get concept graph after {max_attempts} attempts. "
-                        f"Last error: {e}",
-                        error_code="RETRY_FAILED",
-                        troubleshooting=(
-                            "• Check your internet connection\n"
-                            "• Try again in a few moments\n"
-                            "• Contact support if the problem persists"
-                        ),
-                    ) from e
-        raise RuntimeError("Unreachable code in graph")
+
+                    response = temp_http.get(
+                        f"/concepts/{concept_id}/relations", params=params
+                    )
+
+                    # Check if the response is an error response
+                    if (
+                        isinstance(response, dict)
+                        and response.get("result") is None
+                        and "errorMessage" in response
+                    ):
+                        error_msg = response.get("errorMessage", "Unknown API error")
+                        error_code = response.get("errorCode")
+
+                        # Enhanced error messages for graph operations
+                        if "timeout" in error_msg.lower():
+                            raise APIError(
+                                f"Graph timeout: The graph for concept {concept_id} is too complex. "
+                                f"Try:\n"
+                                f"• Reducing the depth (currently {depth})\n"
+                                f"• Reducing the zoom level (currently {zoom_level})\n"
+                                f"• Using a simpler concept as the starting point\n"
+                                f"• Breaking the request into smaller parts",
+                                api_error_code=error_code,
+                                api_message=error_msg,
+                            )
+                        elif "Unable to find" in error_msg and "ConceptV5" in error_msg:
+                            raise APIError(
+                                f"Concept not found: Concept ID {concept_id} "
+                                f"does not exist in the database. "
+                                f"Please verify the concept ID is correct.",
+                                api_error_code=error_code,
+                                api_message=error_msg,
+                            )
+                        else:
+                            raise APIError(
+                                f"Failed to get concept graph: {error_msg}",
+                                api_error_code=error_code,
+                                api_message=error_msg,
+                            )
+
+                    return ConceptRelationsGraph.model_validate(response)
+
+                except Exception as e:
+                    if isinstance(e, APIError):
+                        # API errors are not retryable, raise immediately
+                        raise
+                    elif attempt < max_attempts - 1:
+                        # For other errors, retry if we have attempts left
+                        logger.info(
+                            f"Retrying graph due to error "
+                            f"(attempt {attempt + 1}/{max_attempts}): {e}"
+                        )
+                        continue
+                    else:
+                        # Final attempt failed, raise with enhanced message
+                        raise AthenaError(
+                            f"Failed to get concept graph after {max_attempts} attempts. "
+                            f"Last error: {e}",
+                            error_code="RETRY_FAILED",
+                            troubleshooting=(
+                                "• Check your internet connection\n"
+                                "• Try again in a few moments\n"
+                                "• Consider reducing graph depth or zoom level\n"
+                                "• Contact support if the problem persists"
+                            ),
+                        ) from e
+            raise RuntimeError("Unreachable code in graph")
 
     def summary(
         self,
@@ -521,3 +634,11 @@ class Athena(AthenaClient):
     """Alias for AthenaClient for backward compatibility."""
 
     pass
+
+
+class nullcontext:
+    """Context manager that does nothing."""
+    def __enter__(self):
+        return None
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
