@@ -1,4 +1,4 @@
-from typing import List, Protocol
+from typing import Dict, List, Protocol
 
 
 class DatabaseConnector(Protocol):
@@ -10,4 +10,10 @@ class DatabaseConnector(Protocol):
 
     def get_descendants(self, concept_ids: List[int]) -> List[int]:
         """Return descendant concept IDs for the given ancestors."""
+        ...
+
+    def get_standard_mapping(
+        self, non_standard_concept_ids: List[int]
+    ) -> Dict[int, int]:
+        """Return mapping from non-standard to standard concept IDs."""
         ...
