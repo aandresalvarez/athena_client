@@ -28,10 +28,10 @@ def build_headers(method: str, url: str, body: bytes) -> Dict[str, str]:
         Dictionary of headers to add to the request
     """
     s = get_settings()
-    
+
     # Start with empty headers - authentication is optional
     hdrs = {}
-    
+
     # Add Bearer token if available
     if s.ATHENA_TOKEN:
         hdrs["X-Athena-Auth"] = f"Bearer {s.ATHENA_TOKEN}"

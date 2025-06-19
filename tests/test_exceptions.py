@@ -1,14 +1,18 @@
 """
-Tests for the enhanced exception hierarchy.
+Tests for exception classes and error handling.
 """
 
-import pytest
-from unittest.mock import Mock
-
 from athena_client.exceptions import (
-    AthenaError, NetworkError, TimeoutError, ValidationError,
-    AuthenticationError, RateLimitError, ClientError, ServerError,
-    APIError, RetryFailedError
+    APIError,
+    AthenaError,
+    AuthenticationError,
+    ClientError,
+    NetworkError,
+    RateLimitError,
+    RetryFailedError,
+    ServerError,
+    TimeoutError,
+    ValidationError,
 )
 
 
@@ -34,7 +38,7 @@ class TestAthenaError:
         error = AthenaError(
             "Test error message",
             error_code="TEST_ERROR",
-            troubleshooting="• Step 1\n• Step 2"
+            troubleshooting="• Step 1\n• Step 2",
         )
         assert error.message == "Test error message"
         assert error.error_code == "TEST_ERROR"
@@ -42,10 +46,7 @@ class TestAthenaError:
 
     def test_athena_error_string_with_troubleshooting(self):
         """Test AthenaError string representation with troubleshooting."""
-        error = AthenaError(
-            "Test error message",
-            troubleshooting="• Step 1\n• Step 2"
-        )
+        error = AthenaError("Test error message", troubleshooting="• Step 1\n• Step 2")
         error_str = str(error)
         assert "Test error message" in error_str
         assert "Step 1" in error_str
@@ -238,9 +239,9 @@ class TestRetryFailedError:
             "Retry failed after 3 attempts",
             max_attempts=3,
             last_error=last_error,
-            retry_history=[last_error, last_error, last_error]
+            retry_history=[last_error, last_error, last_error],
         )
-        
+
         assert error.message == "Retry failed after 3 attempts"
         assert error.error_code == "RETRY_FAILED"
         assert error.max_attempts == 3
@@ -251,7 +252,7 @@ class TestRetryFailedError:
             "Retry failed after 3 attempts",
             max_attempts=3,
             last_error="Timeout",
-            retry_history=["Timeout", "Timeout", "Timeout"]
+            retry_history=["Timeout", "Timeout", "Timeout"],
         )
         assert "Retry failed after 3 attempts" in str(err)
         assert "3" in str(err)
@@ -272,25 +273,29 @@ class TestExceptionInheritance:
             ClientError("test", status_code=400),
             ServerError("test", status_code=500),
             APIError("test"),
-            RetryFailedError("test", 1, NetworkError("test"), [])
+            RetryFailedError("test", 1, NetworkError("test"), []),
         ]
-        
+
         for exc in exceptions:
-            assert hasattr(exc, 'message')
-            assert hasattr(exc, 'error_code')
-            assert hasattr(exc, 'troubleshooting')
+            assert hasattr(exc, "message")
+            assert hasattr(exc, "error_code")
+            assert hasattr(exc, "troubleshooting")
 
     def test_exception_types(self):
         """Test that exceptions are of correct types."""
         assert isinstance(NetworkError("test"), NetworkError)
         assert isinstance(TimeoutError("test"), TimeoutError)
         assert isinstance(ValidationError("test"), ValidationError)
-        assert isinstance(AuthenticationError("test", status_code=401), AuthenticationError)
+        assert isinstance(
+            AuthenticationError("test", status_code=401), AuthenticationError
+        )
         assert isinstance(RateLimitError("test", status_code=429), RateLimitError)
         assert isinstance(ClientError("test", status_code=400), ClientError)
         assert isinstance(ServerError("test", status_code=500), ServerError)
         assert isinstance(APIError("test"), APIError)
-        assert isinstance(RetryFailedError("test", 1, NetworkError("test"), []), RetryFailedError)
+        assert isinstance(
+            RetryFailedError("test", 1, NetworkError("test"), []), RetryFailedError
+        )
 
 
 class TestExceptionContext:
@@ -323,4 +328,4 @@ class TestExceptionContext:
         """Test RetryFailedError provides retry-specific troubleshooting."""
         error = RetryFailedError("Failed", 3, NetworkError("test"), [])
         assert "retry attempts have been exhausted" in error.troubleshooting
-        assert "max_retries" in error.troubleshooting.lower() 
+        assert "max_retries" in error.troubleshooting.lower()

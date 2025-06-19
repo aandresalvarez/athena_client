@@ -15,7 +15,7 @@ SAMPLE = ConceptSearchResponse(
             code=str(i),
             standardConcept=ConceptType.STANDARD,
             invalidReason=None,
-            score=1.0
+            score=1.0,
         )
         for i in range(1000)
     ],

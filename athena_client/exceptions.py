@@ -4,13 +4,18 @@ Exception classes for the Athena client.
 This module defines a hierarchy of exceptions that can be raised by the Athena client.
 """
 
-from typing import Optional
+from typing import List, Optional
 
 
 class AthenaError(Exception):
     """Base class for all Athena client exceptions."""
 
-    def __init__(self, message: str, error_code: Optional[str] = None, troubleshooting: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        error_code: Optional[str] = None,
+        troubleshooting: Optional[str] = None,
+    ) -> None:
         """
         Initialize the exception.
 
@@ -51,7 +56,9 @@ class NetworkError(AthenaError):
             "• Try again in a few moments\n"
             "• Contact your network administrator if the problem persists"
         )
-        super().__init__(message, error_code="NETWORK_ERROR", troubleshooting=troubleshooting)
+        super().__init__(
+            message, error_code="NETWORK_ERROR", troubleshooting=troubleshooting
+        )
         self.url = url
 
 
@@ -60,7 +67,9 @@ class TimeoutError(NetworkError):
     Raised when a request times out.
     """
 
-    def __init__(self, message: str, url: Optional[str] = None, timeout: Optional[float] = None) -> None:
+    def __init__(
+        self, message: str, url: Optional[str] = None, timeout: Optional[float] = None
+    ) -> None:
         """
         Initialize the timeout error.
 
@@ -86,7 +95,11 @@ class ServerError(AthenaError):
     """
 
     def __init__(
-        self, message: str, status_code: int, response: Optional[str] = None, url: Optional[str] = None
+        self,
+        message: str,
+        status_code: int,
+        response: Optional[str] = None,
+        url: Optional[str] = None,
     ) -> None:
         """
         Initialize the server error.
@@ -103,7 +116,9 @@ class ServerError(AthenaError):
             "• Check the API status page for known issues\n"
             "• Contact the API administrators if the problem persists"
         )
-        super().__init__(message, error_code="SERVER_ERROR", troubleshooting=troubleshooting)
+        super().__init__(
+            message, error_code="SERVER_ERROR", troubleshooting=troubleshooting
+        )
         self.status_code = status_code
         self.response = response
         self.url = url
@@ -115,7 +130,11 @@ class ClientError(AthenaError):
     """
 
     def __init__(
-        self, message: str, status_code: int, response: Optional[str] = None, url: Optional[str] = None
+        self,
+        message: str,
+        status_code: int,
+        response: Optional[str] = None,
+        url: Optional[str] = None,
     ) -> None:
         """
         Initialize the client error.
@@ -166,7 +185,9 @@ class ClientError(AthenaError):
                 "• Verify your authentication credentials"
             )
 
-        super().__init__(message, error_code="CLIENT_ERROR", troubleshooting=troubleshooting)
+        super().__init__(
+            message, error_code="CLIENT_ERROR", troubleshooting=troubleshooting
+        )
         self.status_code = status_code
         self.response = response
         self.url = url
@@ -191,7 +212,9 @@ class ValidationError(AthenaError):
             "• Try again in a few moments\n"
             "• Contact the API administrators if the problem persists"
         )
-        super().__init__(message, error_code="VALIDATION_ERROR", troubleshooting=troubleshooting)
+        super().__init__(
+            message, error_code="VALIDATION_ERROR", troubleshooting=troubleshooting
+        )
         self.validation_details = validation_details
 
 
@@ -200,7 +223,13 @@ class AuthenticationError(ClientError):
     Raised for authentication-related errors.
     """
 
-    def __init__(self, message: str, status_code: int = 401, response: Optional[str] = None, url: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        status_code: int = 401,
+        response: Optional[str] = None,
+        url: Optional[str] = None,
+    ) -> None:
         """
         Initialize the authentication error.
 
@@ -226,7 +255,13 @@ class RateLimitError(ClientError):
     Raised when rate limits are exceeded.
     """
 
-    def __init__(self, message: str, status_code: int = 429, response: Optional[str] = None, url: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        status_code: int = 429,
+        response: Optional[str] = None,
+        url: Optional[str] = None,
+    ) -> None:
         """
         Initialize the rate limit error.
 
@@ -252,7 +287,12 @@ class APIError(AthenaError):
     Raised when the API returns an error response.
     """
 
-    def __init__(self, message: str, api_error_code: Optional[str] = None, api_message: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        api_error_code: Optional[str] = None,
+        api_message: Optional[str] = None,
+    ) -> None:
         """
         Initialize the API error.
 
@@ -267,7 +307,9 @@ class APIError(AthenaError):
             "• Verify your request parameters\n"
             "• Try again with different parameters if applicable"
         )
-        super().__init__(message, error_code="API_ERROR", troubleshooting=troubleshooting)
+        super().__init__(
+            message, error_code="API_ERROR", troubleshooting=troubleshooting
+        )
         self.api_error_code = api_error_code
         self.api_message = api_message
 
@@ -278,12 +320,12 @@ class RetryFailedError(AthenaError):
     """
 
     def __init__(
-        self, 
-        message: str, 
-        max_attempts: int, 
-        last_error: Exception, 
-        retry_history: list,
-        error_code: Optional[str] = None
+        self,
+        message: str,
+        max_attempts: int,
+        last_error: Exception,
+        retry_history: List[Exception],
+        error_code: Optional[str] = None,
     ) -> None:
         """
         Initialize the retry failed error.
@@ -302,7 +344,11 @@ class RetryFailedError(AthenaError):
             "• Try again in a few moments\n"
             "• Consider increasing max_retries if this is a temporary issue"
         )
-        super().__init__(message, error_code=error_code or "RETRY_FAILED", troubleshooting=troubleshooting)
+        super().__init__(
+            message,
+            error_code=error_code or "RETRY_FAILED",
+            troubleshooting=troubleshooting,
+        )
         self.max_attempts = max_attempts
         self.last_error = last_error
         self.retry_history = retry_history
@@ -310,17 +356,17 @@ class RetryFailedError(AthenaError):
     def __str__(self) -> str:
         """Return a detailed error message with retry information."""
         msg = self.message
-        msg += f"\n\n📊 Retry Information:"
+        msg += "\n\n📊 Retry Information:"
         msg += f"\n• Maximum attempts: {self.max_attempts}"
         msg += f"\n• Attempts made: {len(self.retry_history) + 1}"
         msg += f"\n• Last error: {type(self.last_error).__name__}: {self.last_error}"
-        
+
         if self.retry_history:
-            msg += f"\n\n🔄 Retry History:"
+            msg += "\n\n🔄 Retry History:"
             for i, error in enumerate(self.retry_history, 1):
                 msg += f"\n• Attempt {i}: {type(error).__name__}: {error}"
-        
+
         if self.troubleshooting:
             msg += f"\n\n💡 Troubleshooting: {self.troubleshooting}"
-        
+
         return msg

@@ -97,7 +97,9 @@ class ConceptSearchResponse(BaseModel):
     first: Optional[bool] = Field(None, description="Whether this is the first page")
     size: Optional[int] = Field(None, description="Page size")
     number: Optional[int] = Field(None, description="Page number")
-    numberOfElements: Optional[int] = Field(None, description="Number of elements in this page")
+    numberOfElements: Optional[int] = Field(
+        None, description="Number of elements in this page"
+    )
     empty: Optional[bool] = Field(None, description="Whether the result is empty")
     facets: Optional[Dict[str, Any]] = Field(None, description="Search facets")
 
@@ -122,7 +124,9 @@ class ConceptDetails(BaseModel):
     vocabularyName: Optional[str] = Field(None, description="Vocabulary name")
     vocabularyVersion: Optional[str] = Field(None, description="Vocabulary version")
     vocabularyReference: Optional[str] = Field(None, description="Vocabulary reference")
-    links: Optional[Dict[str, Any]] = Field(None, description="HATEOAS links", alias="_links")
+    links: Optional[Dict[str, Any]] = Field(
+        None, description="HATEOAS links", alias="_links"
+    )
 
 
 class RelationshipItem(BaseModel):
@@ -139,14 +143,18 @@ class RelationshipGroup(BaseModel):
     """Group of relationships with the same type."""
 
     relationshipName: str = Field(..., description="Relationship name")
-    relationships: List[RelationshipItem] = Field(..., description="List of relationships")
+    relationships: List[RelationshipItem] = Field(
+        ..., description="List of relationships"
+    )
 
 
 class ConceptRelationship(BaseModel):
     """Response from the /concepts/{id}/relationships endpoint."""
 
     count: int = Field(..., description="Total count of relationships")
-    items: List[RelationshipGroup] = Field(..., description="List of relationship groups")
+    items: List[RelationshipGroup] = Field(
+        ..., description="List of relationship groups"
+    )
 
 
 class GraphTerm(BaseModel):

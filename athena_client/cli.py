@@ -224,7 +224,9 @@ def search(
     if ctx.obj["output"] == "json":
         output_data = results.to_json()
     elif ctx.obj["output"] == "yaml":
-        output_data = results.to_yaml()
+        import yaml
+
+        output_data = yaml.dump(results.to_list())
     else:
         output_data = results
 
@@ -272,11 +274,7 @@ def relationships(
         ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
     )
 
-    result = client.relationships(
-        concept_id,
-        relationship_id=relationship_id,
-        only_standard=only_standard,
-    )
+    result = client.relationships(concept_id)
     output_data: Any
     if ctx.obj["output"] == "json":
         output_data = result.model_dump_json(indent=2)
@@ -329,23 +327,19 @@ def summary(ctx: Any, concept_id: int) -> None:
     )
 
     result = client.summary(concept_id)
-
-    # Convert Pydantic models to dicts for serialization
-    output_data = {
-        "details": result["details"].model_dump(),
-        "relationships": result["relationships"].model_dump(),
-        "graph": result["graph"].model_dump(),
-    }
+    output_data: dict[str, Any] = {}
+    for key in ["details", "relationships", "graph"]:
+        val = result.get(key)
+        if val is None:
+            output_data[key] = {}
+        elif isinstance(val, dict):
+            output_data[key] = val
+        elif hasattr(val, "model_dump"):
+            output_data[key] = val.model_dump()
+        else:
+            output_data[key] = val
 
     _format_output(output_data, ctx.obj["output"], ctx.obj.get("console"))
-
-
-@cli.command(name="caps")
-@click.pass_context
-def capabilities(ctx: Any) -> None:
-    """List capabilities of the Athena client."""
-    caps = Athena.capabilities()
-    _format_output(caps, ctx.obj["output"], ctx.obj.get("console"))
 
 
 def main() -> None:

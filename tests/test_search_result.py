@@ -1,14 +1,13 @@
 """
-Tests for the SearchResult class.
+Tests for SearchResult class and pagination functionality.
 """
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, MagicMock, patch
+
+from athena_client.models import Concept, ConceptSearchResponse, ConceptType
 from athena_client.search_result import SearchResult
-from athena_client.models import ConceptSearchResponse, Concept, ConceptType
-from athena_client.exceptions import ValidationError
-import sys
-import importlib
 
 
 @pytest.fixture
@@ -31,7 +30,7 @@ def mock_search_response():
                 standardConcept=ConceptType.STANDARD,
                 code="1191",
                 invalidReason=None,
-                score=1.0
+                score=1.0,
             )
         ],
         pageable={"pageSize": 1},
@@ -42,7 +41,7 @@ def mock_search_response():
         size=1,
         number=0,
         numberOfElements=1,
-        empty=False
+        empty=False,
     )
 
 
@@ -55,7 +54,8 @@ def test_search_result_init(mock_search_response, mock_client):
 
 
 def test_search_result_validation_error(mock_client):
-    """Test that passing a dict does not raise an error (type is not enforced at runtime)."""
+    """Test that passing a dict does not raise an error
+    (type is not enforced at runtime)."""
     # This should not raise an error, but will not behave as expected
     result = SearchResult({"invalid": "data"}, mock_client)
     assert result is not None
@@ -121,7 +121,7 @@ def test_search_result_length_and_indexing(mock_search_response, mock_client):
     result = SearchResult(mock_search_response, mock_client)
     assert len(result) == 1
     assert result[0].name == "Aspirin"
-    
+
     # Test iteration
     concepts = list(result)
     assert len(concepts) == 1

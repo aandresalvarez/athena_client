@@ -1,13 +1,14 @@
 """
-Tests for the updated Pydantic models.
+Tests for Pydantic models and data validation.
 """
 
 import pytest
-from datetime import date
-from typing import Optional
 
 from athena_client.models import (
-    Concept, ConceptDetails, ConceptSearchResponse, ConceptType
+    Concept,
+    ConceptDetails,
+    ConceptSearchResponse,
+    ConceptType,
 )
 
 
@@ -41,9 +42,9 @@ class TestConcept:
             standardConcept=ConceptType.STANDARD,
             code="1191",
             invalidReason=None,
-            score=1.0
+            score=1.0,
         )
-        
+
         assert concept.id == 1
         assert concept.name == "Aspirin"
         assert concept.domain == "Drug"
@@ -65,11 +66,11 @@ class TestConcept:
             "standardConcept": "Standard",
             "code": "1191",
             "invalidReason": None,
-            "score": 1.0
+            "score": 1.0,
         }
-        
+
         concept = Concept.model_validate(data)
-        
+
         assert concept.name == "Aspirin"
         assert concept.standardConcept == ConceptType.STANDARD
 
@@ -84,11 +85,11 @@ class TestConcept:
             "standardConcept": None,
             "code": "1191",
             "invalidReason": "U",
-            "score": 0.8
+            "score": 0.8,
         }
-        
+
         concept = Concept.model_validate(concept_data)
-        
+
         assert concept.id == 1
         assert concept.name == "Aspirin"
         assert concept.standardConcept is None
@@ -106,9 +107,9 @@ class TestConcept:
             standardConcept=ConceptType.STANDARD,
             code="1191",
             invalidReason=None,
-            score=1.0
+            score=1.0,
         )
-        
+
         # Test that string representation includes key fields
         concept_str = str(concept)
         assert "Aspirin" in concept_str
@@ -130,9 +131,9 @@ class TestConceptDetails:
             conceptCode="1191",
             invalidReason=None,
             validStart="2000-01-01",
-            validEnd="2099-12-31"
+            validEnd="2099-12-31",
         )
-        
+
         assert details.id == 1
         assert details.name == "Aspirin"
         assert details.domainId == "Drug"
@@ -156,11 +157,11 @@ class TestConceptDetails:
             "conceptCode": "1191",
             "invalidReason": None,
             "validStart": "2000-01-01",
-            "validEnd": "2099-12-31"
+            "validEnd": "2099-12-31",
         }
-        
+
         details = ConceptDetails.model_validate(data)
-        
+
         assert details.name == "Aspirin"
         assert details.standardConcept == ConceptType.STANDARD
 
@@ -176,11 +177,11 @@ class TestConceptDetails:
             "conceptCode": "1191",
             "invalidReason": None,
             "validStart": "2000-01-01",
-            "validEnd": "2099-12-31"
+            "validEnd": "2099-12-31",
         }
-        
+
         details = ConceptDetails.model_validate(details_data)
-        
+
         assert details.id == 1
         assert details.name == "Aspirin"
         assert details.standardConcept == ConceptType.STANDARD
@@ -197,9 +198,9 @@ class TestConceptDetails:
             conceptCode="1191",
             invalidReason=None,
             validStart="2000-01-01",
-            validEnd="2099-12-31"
+            validEnd="2099-12-31",
         )
-        
+
         # Test that string representation includes key fields
         details_str = str(details)
         assert "Aspirin" in details_str
@@ -222,7 +223,7 @@ class TestConceptSearchResponse:
                     standardConcept=ConceptType.STANDARD,
                     code="1191",
                     invalidReason=None,
-                    score=1.0
+                    score=1.0,
                 )
             ],
             pageable={"pageSize": 1},
@@ -233,9 +234,9 @@ class TestConceptSearchResponse:
             size=1,
             number=0,
             numberOfElements=1,
-            empty=False
+            empty=False,
         )
-        
+
         assert len(response.content) == 1
         assert response.content[0].name == "Aspirin"
         assert response.totalElements == 1
@@ -255,7 +256,7 @@ class TestConceptSearchResponse:
                     "standardConcept": "Standard",
                     "code": "1191",
                     "invalidReason": None,
-                    "score": 1.0
+                    "score": 1.0,
                 }
             ],
             "pageable": {"pageSize": 1},
@@ -266,11 +267,11 @@ class TestConceptSearchResponse:
             "size": 1,
             "number": 0,
             "numberOfElements": 1,
-            "empty": False
+            "empty": False,
         }
-        
+
         response = ConceptSearchResponse.model_validate(data)
-        
+
         assert len(response.content) == 1
         assert response.content[0].name == "Aspirin"
         assert response.totalElements == 1
@@ -291,9 +292,9 @@ class TestConceptSearchResponse:
             "numberOfElements": 0,
             "empty": True,
         }
-        
+
         response = ConceptSearchResponse.model_validate(response_data)
-        
+
         assert len(response.content) == 0
         assert response.totalElements == 0
         assert response.empty is True
@@ -317,9 +318,9 @@ class TestModelValidation:
             "invalid_reason": None,
             "domain": {"id": 13, "name": "Drug"},
             "vocabulary": {"id": "RxNorm", "name": "RxNorm"},
-            "concept_class": {"id": "Ingredient", "name": "Ingredient"}
+            "concept_class": {"id": "Ingredient", "name": "Ingredient"},
         }
-        
+
         with pytest.raises(ValueError):
             Concept.model_validate(invalid_data)
 
@@ -327,10 +328,10 @@ class TestModelValidation:
         """Test validation error with missing required fields."""
         incomplete_data = {
             "id": 1127433,
-            "name": "Aspirin"
+            "name": "Aspirin",
             # Missing required fields
         }
-        
+
         with pytest.raises(ValueError):
             Concept.model_validate(incomplete_data)
 
@@ -349,8 +350,8 @@ class TestModelValidation:
             "invalid_reason": None,
             "domain": {"id": 13, "name": "Drug"},
             "vocabulary": {"id": "RxNorm", "name": "RxNorm"},
-            "concept_class": {"id": "Ingredient", "name": "Ingredient"}
+            "concept_class": {"id": "Ingredient", "name": "Ingredient"},
         }
-        
+
         with pytest.raises(ValueError):
-            Concept.model_validate(invalid_data) 
+            Concept.model_validate(invalid_data)

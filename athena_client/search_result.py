@@ -5,7 +5,7 @@ This module provides a wrapper around search results that provides
 convenient access to the data in various formats.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 import pandas as pd
 
@@ -74,7 +74,7 @@ class SearchResult:
             raise ImportError(
                 "pandas is required for DataFrame output. "
                 "Install with: pip install 'athena-client[pandas]'"
-            )
+            ) from None
 
     def next_page(self) -> Optional["SearchResult"]:
         """Get the next page of results.
@@ -84,14 +84,14 @@ class SearchResult:
         """
         if self._response.last:
             return None
-
-        # Extract query from the current response
-        # This is a simplified approach - in practice, you might want to store the original query
         current_page = self._response.number
+        size = self._response.size
+        if current_page is None or size is None:
+            return None
         return self._client.search(
             query="",  # This would need to be the original query
             page=current_page + 1,
-            size=self._response.size,
+            size=size,
         )
 
     def previous_page(self) -> Optional["SearchResult"]:
@@ -102,12 +102,14 @@ class SearchResult:
         """
         if self._response.first:
             return None
-
         current_page = self._response.number
+        size = self._response.size
+        if current_page is None or size is None:
+            return None
         return self._client.search(
             query="",  # This would need to be the original query
             page=current_page - 1,
-            size=self._response.size,
+            size=size,
         )
 
     @property
@@ -120,12 +122,12 @@ class SearchResult:
         # Try to get from direct field first, then from pageable
         if self._response.totalElements is not None:
             return self._response.totalElements
-        
+
         # Extract from pageable if available
         pageable = self._response.pageable
         if pageable and "totalElements" in pageable:
             return pageable["totalElements"]
-        
+
         # Fallback to number of elements in current page
         return len(self._response.content)
 
@@ -139,14 +141,14 @@ class SearchResult:
         # Try to get from direct field first, then calculate from pageable
         if self._response.totalPages is not None:
             return self._response.totalPages
-        
+
         # Calculate from pageable if available
         pageable = self._response.pageable
         if pageable and "totalElements" in pageable and "pageSize" in pageable:
             total_elements = pageable["totalElements"]
             page_size = pageable["pageSize"]
             return (total_elements + page_size - 1) // page_size
-        
+
         return 1
 
     @property
@@ -159,12 +161,12 @@ class SearchResult:
         # Try to get from direct field first, then from pageable
         if self._response.number is not None:
             return self._response.number
-        
+
         # Extract from pageable if available
         pageable = self._response.pageable
         if pageable and "pageNumber" in pageable:
             return pageable["pageNumber"]
-        
+
         return 0
 
     @property
@@ -177,12 +179,12 @@ class SearchResult:
         # Try to get from direct field first, then from pageable
         if self._response.size is not None:
             return self._response.size
-        
+
         # Extract from pageable if available
         pageable = self._response.pageable
         if pageable and "pageSize" in pageable:
             return pageable["pageSize"]
-        
+
         return len(self._response.content)
 
     @property
@@ -213,7 +215,7 @@ class SearchResult:
         """
         return self._response.content[index]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator["Concept"]:
         """Iterate over concepts in the current page.
 
         Returns:
