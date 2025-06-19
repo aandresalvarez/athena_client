@@ -50,6 +50,269 @@ graph = athena.graph(concept_id=1127433, depth=5)
 summary = athena.summary(concept_id=1127433)
 ```
 
+## Concept Exploration - Finding Standard Concepts
+
+The athena-client provides advanced concept exploration capabilities to help you find standard concepts that might not appear directly in search results. This is particularly useful when working with medical terminology where standard concepts may be referenced through synonyms, relationships, or cross-references.
+
+### Why Concept Exploration?
+
+Medical terminology systems often have complex hierarchies where:
+- **Standard concepts** are the preferred, canonical representations
+- **Non-standard concepts** may be more commonly used terms
+- **Synonyms** provide alternative names for the same concept
+- **Relationships** connect related concepts across vocabularies
+- **Cross-references** map concepts between different coding systems
+
+The concept exploration functionality helps bridge the gap between user queries and standard medical concepts.
+
+### Basic Concept Exploration
+
+```python
+from athena_client import Athena, create_concept_explorer
+
+# Create client and explorer
+athena = Athena()
+explorer = create_concept_explorer(athena)
+
+# Find standard concepts through exploration
+results = explorer.find_standard_concepts(
+    query="headache",
+    max_exploration_depth=2,
+    include_synonyms=True,
+    include_relationships=True,
+    vocabulary_priority=['SNOMED', 'RxNorm', 'ICD10']
+)
+
+print(f"Direct matches: {len(results['direct_matches'])}")
+print(f"Synonym matches: {len(results['synonym_matches'])}")
+print(f"Relationship matches: {len(results['relationship_matches'])}")
+print(f"Cross-references: {len(results['cross_references'])}")
+```
+
+### Mapping to Standard Concepts with Confidence Scores
+
+```python
+# Map a query to standard concepts with confidence scoring
+mappings = explorer.map_to_standard_concepts(
+    query="migraine",
+    target_vocabularies=['SNOMED', 'RxNorm'],
+    confidence_threshold=0.5
+)
+
+for mapping in mappings:
+    concept = mapping['concept']
+    confidence = mapping['confidence']
+    path = mapping['exploration_path']
+    
+    print(f"Concept: {concept.name}")
+    print(f"Vocabulary: {concept.vocabulary}")
+    print(f"Confidence: {confidence:.2f}")
+    print(f"Discovery path: {path}")
+    print()
+```
+
+### Alternative Query Suggestions
+
+When standard concepts aren't found directly, get alternative query suggestions:
+
+```python
+# Get alternative query suggestions
+suggestions = explorer.suggest_alternative_queries(
+    query="heart attack", 
+    max_suggestions=8
+)
+
+print("Alternative suggestions:")
+for suggestion in suggestions:
+    print(f"  - {suggestion}")
+
+# Test a suggestion
+test_results = athena.search(suggestions[0], size=5)
+standard_concepts = [c for c in test_results.all() if c.standardConcept == "Standard"]
+print(f"Found {len(standard_concepts)} standard concepts")
+```
+
+### Concept Hierarchy Exploration
+
+Explore the hierarchical relationships of concepts:
+
+```python
+# Get concept hierarchy
+hierarchy = explorer.get_concept_hierarchy(
+    concept_id=12345, 
+    max_depth=3
+)
+
+print(f"Root concept: {hierarchy['root_concept'].name}")
+print(f"Parent relationships: {len(hierarchy['parents'])}")
+print(f"Child relationships: {len(hierarchy['children'])}")
+print(f"Sibling relationships: {len(hierarchy['siblings'])}")
+
+# Show parent concepts
+for parent in hierarchy['parents'][:3]:
+    print(f"  Parent: {parent.targetConceptName} ({parent.relationshipName})")
+```
+
+### Comprehensive Workflow Example
+
+Here's a complete workflow for finding standard concepts:
+
+```python
+def find_standard_concepts_workflow(query):
+    """Comprehensive workflow for finding standard concepts."""
+    
+    # Step 1: Try direct search first
+    direct_results = athena.search(query, size=10)
+    direct_standard = [c for c in direct_results.all() if c.standardConcept == "Standard"]
+    
+    if direct_standard:
+        print(f"✅ Found {len(direct_standard)} standard concepts directly")
+        return direct_standard
+    
+    # Step 2: Use concept exploration
+    print("🔍 Exploring for standard concepts...")
+    exploration_results = explorer.find_standard_concepts(
+        query=query,
+        max_exploration_depth=3,
+        include_synonyms=True,
+        include_relationships=True
+    )
+    
+    # Step 3: Get high-confidence mappings
+    mappings = explorer.map_to_standard_concepts(
+        query=query,
+        confidence_threshold=0.4
+    )
+    
+    if mappings:
+        print(f"✅ Found {len(mappings)} high-confidence mappings")
+        return [m['concept'] for m in mappings]
+    
+    # Step 4: Try alternative queries
+    print("💡 Trying alternative queries...")
+    suggestions = explorer.suggest_alternative_queries(query, max_suggestions=5)
+    
+    for suggestion in suggestions:
+        test_results = athena.search(suggestion, size=5)
+        standard_found = [c for c in test_results.all() if c.standardConcept == "Standard"]
+        if standard_found:
+            print(f"✅ Found standard concepts with suggestion: '{suggestion}'")
+            return standard_found
+    
+    print("❌ No standard concepts found")
+    return []
+
+# Use the workflow
+standard_concepts = find_standard_concepts_workflow("myocardial infarction")
+```
+
+### Advanced Configuration
+
+Configure exploration behavior for your specific needs:
+
+```python
+# Create explorer with custom configuration
+explorer = ConceptExplorer(athena)
+
+# Comprehensive exploration with all features
+results = explorer.find_standard_concepts(
+    query="diabetes",
+    max_exploration_depth=3,        # How deep to explore relationships
+    include_synonyms=True,          # Explore synonyms
+    include_relationships=True,     # Explore relationships
+    vocabulary_priority=[           # Preferred vocabularies
+        'SNOMED', 
+        'RxNorm', 
+        'ICD10', 
+        'LOINC'
+    ]
+)
+
+# High-confidence mapping with specific vocabularies
+mappings = explorer.map_to_standard_concepts(
+    query="hypertension",
+    target_vocabularies=['SNOMED', 'ICD10'],  # Only these vocabularies
+    confidence_threshold=0.7                  # High confidence threshold
+)
+```
+
+### Use Cases
+
+#### 1. Clinical Decision Support
+```python
+# Find standard concepts for clinical conditions
+conditions = ["chest pain", "shortness of breath", "fever"]
+standard_concepts = {}
+
+for condition in conditions:
+    mappings = explorer.map_to_standard_concepts(
+        condition, 
+        target_vocabularies=['SNOMED'],
+        confidence_threshold=0.6
+    )
+    if mappings:
+        standard_concepts[condition] = mappings[0]['concept']
+```
+
+#### 2. Medication Mapping
+```python
+# Map medication names to standard drug concepts
+medications = ["aspirin", "ibuprofen", "acetaminophen"]
+drug_concepts = {}
+
+for med in medications:
+    mappings = explorer.map_to_standard_concepts(
+        med,
+        target_vocabularies=['RxNorm'],
+        confidence_threshold=0.5
+    )
+    if mappings:
+        drug_concepts[med] = mappings[0]['concept']
+```
+
+#### 3. Cross-Vocabulary Mapping
+```python
+# Map between different coding systems
+icd10_concept = athena.search("diabetes", vocabulary="ICD10")[0]
+snomed_mappings = explorer.map_to_standard_concepts(
+    icd10_concept.name,
+    target_vocabularies=['SNOMED'],
+    confidence_threshold=0.7
+)
+```
+
+### Best Practices
+
+1. **Start with direct search** - It's faster and often sufficient
+2. **Use appropriate confidence thresholds** - 0.5-0.7 for most use cases
+3. **Specify target vocabularies** - Focus on relevant coding systems
+4. **Explore relationships** - Useful for finding broader/narrower concepts
+5. **Use synonyms** - Helps with alternative terminology
+6. **Monitor exploration depth** - Balance thoroughness with performance
+
+### Performance Considerations
+
+- **Exploration depth** affects performance - use 1-3 for most cases
+- **Vocabulary filtering** reduces API calls and improves relevance
+- **Confidence thresholds** help focus on high-quality matches
+- **Caching** can be implemented for frequently used mappings
+
+### Error Handling
+
+The concept exploration functionality includes robust error handling:
+
+```python
+try:
+    mappings = explorer.map_to_standard_concepts("diabetes")
+    print(f"Found {len(mappings)} mappings")
+except Exception as e:
+    print(f"Exploration failed: {e}")
+    # Fall back to direct search
+    results = athena.search("diabetes")
+```
+
+This concept exploration functionality helps ensure you can find the standard medical concepts you need, even when they don't appear directly in search results.
+
 ## Error Handling
 
 The athena-client provides **automatic error handling and recovery** out of the box. You don't need to implement try-catch blocks - the client handles errors gracefully and provides clear, actionable messages:

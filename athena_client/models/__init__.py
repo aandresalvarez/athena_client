@@ -120,7 +120,7 @@ class ConceptDetails(BaseModel):
     validStart: str = Field(..., description="Valid start date")
     validEnd: str = Field(..., description="Valid end date")
     synonyms: Optional[List[Union[str, dict]]] = Field(None, description="Concept synonyms")
-    validTerm: Optional[str] = Field(None, description="Valid term")
+    validTerm: Optional[Union[str, dict]] = Field(None, description="Valid term")
     vocabularyName: Optional[str] = Field(None, description="Vocabulary name")
     vocabularyVersion: Optional[str] = Field(None, description="Vocabulary version")
     vocabularyReference: Optional[str] = Field(None, description="Vocabulary reference")
@@ -146,6 +146,19 @@ class ConceptDetails(BaseModel):
                         str_values = [str(v) for v in item.values() if isinstance(v, str)]
                         normalized.append(", ".join(str_values))
             values["synonyms"] = normalized
+        return values
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_valid_term(cls, values):
+        valid_term = values.get("validTerm")
+        if valid_term and isinstance(valid_term, dict):
+            # Extract name from validTerm dict if it's a dictionary
+            if "name" in valid_term:
+                values["validTerm"] = valid_term["name"]
+            else:
+                # Fallback: convert to string representation
+                values["validTerm"] = str(valid_term)
         return values
 
 
