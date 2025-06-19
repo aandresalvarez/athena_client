@@ -212,24 +212,35 @@ def demo_multiple_concepts():
     
     for concept_id, name, vocabulary in test_concepts:
         print_concept_info(concept_id, name, vocabulary)
-        
         try:
             graph = athena.graph(concept_id, depth=1, zoom_level=1)
-            
             if graph.terms:
                 stats = analyze_graph_structure(graph)
                 print(f"   ✅ Graph data: {stats['total_terms']} terms, {stats['total_links']} links")
-                
-                # Show a sample of related concepts
+                # Show a sample of related concepts with standard status
                 if stats['related_concepts']:
-                    sample = stats['related_concepts'][0]
-                    print(f"   🔗 Sample relationship: {sample['name']} (depth {sample['depth']})")
+                    print("   🔗 Sample related concepts (standard status):")
+                    for sample in stats['related_concepts'][:3]:
+                        # Find the term in graph.terms to get the 'standard' attribute
+                        term = next((t for t in graph.terms if t.id == sample['id']), None)
+                        if term is not None:
+                            std_attr = getattr(term, 'standard', None)
+                            # Normalize the standard attribute (could be 'S', 's', 'standard', True, etc.)
+                            if std_attr is None:
+                                std_str = "unknown"
+                            elif isinstance(std_attr, bool):
+                                std_str = "standard" if std_attr else "non-standard"
+                            elif isinstance(std_attr, str):
+                                std_str = "standard" if std_attr.strip().lower() in ["s", "standard", "true", "yes", "y"] else ("non-standard" if std_attr.strip().lower() in ["n", "non-standard", "false", "no"] else std_attr)
+                            else:
+                                std_str = str(std_attr)
+                        else:
+                            std_str = "unknown"
+                        print(f"      - {sample['name']} (depth {sample['depth']}): {std_str}")
             else:
                 print("   ❌ No graph data available")
-                
         except Exception as e:
             print(f"   ❌ Error: {e}")
-        
         print()  # Empty line between concepts
 
 

@@ -379,6 +379,7 @@ class TestCLI:
         import importlib
 
         import athena_client.cli as cli_module
+
         cli_module = importlib.reload(cli_module)
 
         mock_client = Mock()
@@ -386,21 +387,30 @@ class TestCLI:
             return_value={"concept_ids": [1], "metadata": {"status": "SUCCESS"}}
         )
 
-        with patch.object(
-            cli_module, "_create_client", return_value=mock_client
-        ) as mock_create_client, patch.object(
-            cli_module, "_format_output"
-        ) as mock_format_output, patch(
-            "athena_client.cli.asyncio.run",
-            return_value={
-                "concept_ids": [1],
-                "metadata": {"status": "SUCCESS", "strategy_used": "Tier 1"},
-            },
+        with (
+            patch.object(
+                cli_module, "_create_client", return_value=mock_client
+            ) as mock_create_client,
+            patch.object(cli_module, "_format_output") as mock_format_output,
+            patch(
+                "athena_client.cli.asyncio.run",
+                return_value={
+                    "concept_ids": [1],
+                    "metadata": {"status": "SUCCESS", "strategy_used": "Tier 1"},
+                },
+            ),
         ):
             runner = CliRunner()
             result = runner.invoke(
                 cli_module.cli,
-                ["--output", "json", "generate-set", "diabetes", "--db-connection", "sqlite:///db"],
+                [
+                    "--output",
+                    "json",
+                    "generate-set",
+                    "diabetes",
+                    "--db-connection",
+                    "sqlite:///db",
+                ],
             )
 
         assert result.exit_code == 0
@@ -412,6 +422,7 @@ class TestCLI:
         import importlib
 
         import athena_client.cli as cli_module
+
         cli_module = importlib.reload(cli_module)
 
         mock_client = Mock()
@@ -422,21 +433,30 @@ class TestCLI:
             }
         )
 
-        with patch.object(
-            cli_module, "_create_client", return_value=mock_client
-        ) as mock_create_client, patch.object(
-            cli_module, "_format_output"
-        ) as mock_format_output, patch(
-            "athena_client.cli.asyncio.run",
-            return_value={
-                "concept_ids": [],
-                "metadata": {"status": "FAILURE", "reason": "bad"},
-            },
+        with (
+            patch.object(
+                cli_module, "_create_client", return_value=mock_client
+            ) as mock_create_client,
+            patch.object(cli_module, "_format_output") as mock_format_output,
+            patch(
+                "athena_client.cli.asyncio.run",
+                return_value={
+                    "concept_ids": [],
+                    "metadata": {"status": "FAILURE", "reason": "bad"},
+                },
+            ),
         ):
             runner = CliRunner()
             result = runner.invoke(
                 cli_module.cli,
-                ["--output", "json", "generate-set", "term", "--db-connection", "sqlite:///db"],
+                [
+                    "--output",
+                    "json",
+                    "generate-set",
+                    "term",
+                    "--db-connection",
+                    "sqlite:///db",
+                ],
             )
 
         assert result.exit_code == 0

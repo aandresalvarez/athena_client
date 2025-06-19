@@ -25,6 +25,7 @@ Usage:
 import asyncio
 import os
 import sys
+import logging
 
 # Add parent directory to Python path for local execution
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -33,8 +34,8 @@ from athena_client import Athena
 
 # --- Configuration for Your BigQuery OMOP CDM ---
 # Replace these with your actual Google Cloud Project ID and BigQuery dataset name.
-GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "your-gcp-project-id")
-BIGQUERY_DATASET = os.environ.get("BIGQUERY_DATASET", "your_omop_dataset")
+GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "som-rit-starr-training")
+BIGQUERY_DATASET = os.environ.get("BIGQUERY_DATASET", "starr_omop_cdm5_deid_1pcent_lite_20191024")
 # -------------------------------------------------
 
 def create_bigquery_connection_string() -> str:
@@ -54,6 +55,20 @@ async def main():
     """
     Main function to connect to BigQuery and generate a concept set.
     """
+    # Suppress noisy network error logs from BigQuery/Google libraries
+    for noisy_logger in [
+        "google.auth.transport.requests",
+        "google.auth._default",
+        "google.resumable_media",
+        "google.api_core.retry",
+        "urllib3.connectionpool",
+        "requests.packages.urllib3.connectionpool",
+        "sqlalchemy.engine.Engine",
+        "pybigquery.sqlalchemy_bigquery",
+        "sqlalchemy_bigquery",
+    ]:
+        logging.getLogger(noisy_logger).setLevel(logging.ERROR)
+
     print("🚀 Athena Client with Google BigQuery Demo")
     print("=" * 50)
 
@@ -65,7 +80,7 @@ async def main():
     athena = Athena()
     
     # 3. Define the search query
-    search_query = "Acute Myocardial Infarction"
+    search_query = "Diabetes Mellitus"
     print(f"\n🔍 Generating concept set for: '{search_query}'")
 
     try:
@@ -85,30 +100,27 @@ async def main():
         if metadata.get("status") == "SUCCESS":
             print(f"Status: {metadata['status']} ✨")
             print(f"Strategy Used: {metadata['strategy_used']}")
-            
             warnings = metadata.get('warnings', [])
             if warnings:
                 print("\nWarnings:")
                 for warning in warnings:
                     print(f"  - {warning}")
-
             print(f"\nFound {len(concept_set.get('concept_ids', []))} total concepts (including descendants).")
-            
             seed_concepts = metadata.get('seed_concepts', [])
             if seed_concepts:
                 print(f"The set was built from {len(seed_concepts)} validated standard concept(s):")
                 for concept_id in seed_concepts:
                     print(f"  - Concept ID: {concept_id}")
-
         else:
             print(f"Status: {metadata.get('status', 'FAILURE')} ❌")
+            # Always print the full reason, even if it's not the default
             print(f"Reason: {metadata.get('reason', 'An unknown error occurred.')}")
-            
             suggestions = metadata.get('suggestions', [])
             if suggestions:
                 print("\nSuggestions:")
                 for suggestion in suggestions:
-                    print(f"  - {suggestion}")
+                    if suggestion:
+                        print(f"  - {suggestion}")
 
     except Exception as e:
         print(f"\n❌ An unexpected error occurred during the process: {e}")
