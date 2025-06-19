@@ -4,6 +4,8 @@ athena-client: Production-ready Python SDK for the OHDSI Athena Concepts API
 
 from .client import AthenaClient
 from .concept_explorer import ConceptExplorer, create_concept_explorer
+from .db.base import DatabaseConnector
+from .db.sqlalchemy_connector import SQLAlchemyConnector
 from .models import ConceptDetails, ConceptRelationsGraph, ConceptRelationship
 
 Athena = AthenaClient
@@ -18,4 +20,6 @@ __all__ = [
     "ConceptRelationship",
     "ConceptExplorer",
     "create_concept_explorer",
+    "SQLAlchemyConnector",
+    "DatabaseConnector",
 ]
