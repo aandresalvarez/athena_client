@@ -100,3 +100,51 @@ class TestSQLAlchemyConnector:
         result = connector.get_descendants([999])
 
         assert result == []
+
+    def test_get_standard_mapping_success(self):
+        engine = Mock()
+        connection = Mock()
+        engine.connect.return_value.__enter__ = Mock(return_value=connection)
+        engine.connect.return_value.__exit__ = Mock(return_value=None)
+        connection.execute.return_value = [(10, 100, "S")]
+
+        connector = SQLAlchemyConnector(engine)
+        result = connector.get_standard_mapping([10])
+
+        assert result == {10: 100}
+
+    def test_get_standard_mapping_multiple(self):
+        engine = Mock()
+        connection = Mock()
+        engine.connect.return_value.__enter__ = Mock(return_value=connection)
+        engine.connect.return_value.__exit__ = Mock(return_value=None)
+        connection.execute.return_value = [(10, 100, "S"), (11, 101, "S")]
+
+        connector = SQLAlchemyConnector(engine)
+        result = connector.get_standard_mapping([10, 11, 12])
+
+        assert result == {10: 100, 11: 101}
+
+    def test_get_standard_mapping_no_mapping(self):
+        engine = Mock()
+        connection = Mock()
+        engine.connect.return_value.__enter__ = Mock(return_value=connection)
+        engine.connect.return_value.__exit__ = Mock(return_value=None)
+        connection.execute.return_value = []
+
+        connector = SQLAlchemyConnector(engine)
+        result = connector.get_standard_mapping([10])
+
+        assert result == {}
+
+    def test_get_standard_mapping_maps_to_non_standard(self):
+        engine = Mock()
+        connection = Mock()
+        engine.connect.return_value.__enter__ = Mock(return_value=connection)
+        engine.connect.return_value.__exit__ = Mock(return_value=None)
+        connection.execute.return_value = [(10, 100, "C")]
+
+        connector = SQLAlchemyConnector(engine)
+        result = connector.get_standard_mapping([10])
+
+        assert result == {}
