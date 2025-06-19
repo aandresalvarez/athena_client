@@ -328,8 +328,9 @@ class TestCLI:
         """Test CLI main entrypoint."""
         with patch("athena_client.cli.cli") as mock_cli:
             from athena_client.cli import main
-
-            main()
+            import sys
+            with patch.object(sys, "argv", ["athena"]):
+                main()
             mock_cli.assert_called_once()
 
     def test_format_output_yaml_import_error_branch(self):
