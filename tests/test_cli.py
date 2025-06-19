@@ -67,12 +67,9 @@ class TestCLI:
     def test_format_output_yaml_success(self):
         """Test YAML output formatting."""
         data = {"key": "value", "number": 123}
-
-        with patch("builtins.__import__") as mock_import:
-            mock_yaml = Mock()
-            mock_yaml.dump.return_value = "key: value\nnumber: 123\n"
-            mock_import.return_value = mock_yaml
-
+        mock_yaml = Mock()
+        mock_yaml.dump.return_value = "key: value\nnumber: 123\n"
+        with patch.dict("sys.modules", {"yaml": mock_yaml}):
             with patch("builtins.print") as mock_print:
                 _format_output(data, "yaml")
                 mock_print.assert_called_once_with("key: value\nnumber: 123\n")
@@ -80,8 +77,7 @@ class TestCLI:
     def test_format_output_yaml_import_error(self):
         """Test YAML output formatting when pyyaml is not available."""
         data = {"key": "value"}
-
-        with patch("builtins.__import__", side_effect=ImportError):
+        with patch.dict("sys.modules", {"yaml": None}):
             with patch("builtins.print") as mock_print, patch("sys.exit") as mock_exit:
                 _format_output(data, "yaml")
                 mock_print.assert_called()
@@ -339,17 +335,7 @@ class TestCLI:
     def test_format_output_yaml_import_error_branch(self):
         """Test _format_output YAML ImportError branch."""
         data = {"key": "value"}
-
-        # Mock the import to raise ImportError
-        with patch("builtins.__import__") as mock_import:
-
-            def side_effect(name, *args, **kwargs):
-                if name == "yaml":
-                    raise ImportError("No module named 'yaml'")
-                return __import__(name, *args, **kwargs)
-
-            mock_import.side_effect = side_effect
-
+        with patch.dict("sys.modules", {"yaml": None}):
             with patch("builtins.print") as mock_print, patch("sys.exit") as mock_exit:
                 _format_output(data, "yaml")
                 mock_print.assert_called()
@@ -462,7 +448,7 @@ class TestCLI:
         assert result.exit_code == 0
         mock_format_output.assert_called_once()
         mock_create_client.assert_called_once()
-        assert "Failure:" in result.stderr
+        assert "Failure:" in result.output
 
     def test_generate_set_command_missing_db(self):
         """Missing --db-connection option."""

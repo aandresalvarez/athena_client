@@ -9,14 +9,18 @@ from base64 import b64encode
 from datetime import datetime
 from typing import Any, Dict
 
-from cryptography.hazmat.primitives import hashes, serialization
-
 from .settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 
-def build_headers(method: str, url: str, body: bytes, serialization_module=None, hashes_module=None) -> Dict[str, str]:
+def build_headers(
+    method: str,
+    url: str,
+    body: bytes,
+    serialization_module: Any = None,
+    hashes_module: Any = None,
+) -> Dict[str, str]:
     """
     Build authentication headers for Athena API requests.
 
@@ -49,6 +53,7 @@ def build_headers(method: str, url: str, body: bytes, serialization_module=None,
         try:
             if serialization_module is None or hashes_module is None:
                 from cryptography.hazmat.primitives import hashes, serialization
+
                 serialization_module = serialization
                 hashes_module = hashes
         except ImportError:
