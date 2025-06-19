@@ -9,7 +9,19 @@ A production-ready Python SDK for the OHDSI Athena Concepts API.
 pip install athena-client
 ```
 
-With optional dependencies:
+To enable database integration features for concept set generation, install the necessary extras:
+
+**For PostgreSQL:**
+```bash
+pip install "athena-client[postgres]"
+```
+
+**For Google BigQuery:**
+```bash
+pip install "athena-client[bigquery]"
+```
+
+Other optional dependencies:
 ```bash
 pip install athena-client[cli]      # Command-line interface
 pip install athena-client[async]    # Async client
@@ -49,6 +61,62 @@ graph = athena.graph(concept_id=1127433, depth=5)
 # Get comprehensive summary
 summary = athena.summary(concept_id=1127433)
 ```
+
+---
+
+## Generating Validated Concept Sets
+
+This feature bridges the gap between the public Athena API and your local OMOP database, allowing you to generate complete, analysis-ready concept sets that are validated against your specific vocabulary version.
+
+### How It Works
+1.  **Discover**: Uses the Athena API's powerful search to find candidate standard concepts for your query.
+2.  **Validate**: Checks if those concepts exist and are marked as 'Standard' **in your local database**. This is crucial for aligning with your institution's vocabulary version.
+3.  **Expand**: Queries your local `concept_ancestor` table to instantly find all descendant concepts, ensuring your set is complete.
+4.  **Recover**: If the best concept from the API isn't in your local DB, it intelligently finds an alternative path using other candidates or local non-standard mappings.
+
+### Usage Example
+```python
+import asyncio
+from athena_client import Athena
+
+# Your OMOP database connection string
+# (You'll get this from your database administrator)
+DB_CONNECTION_STRING = "postgresql://user:pass@localhost/omop_cdm"
+
+async def main():
+    athena = Athena()
+
+    # Generate a concept set for "Type 2 Diabetes"
+    concept_set = await athena.generate_concept_set(
+        query="Type 2 Diabetes",
+        db_connection_string=DB_CONNECTION_STRING
+    )
+
+    if concept_set["metadata"]["status"] == "SUCCESS":
+        print(f"Success! Found {len(concept_set['concept_ids'])} concepts.")
+        print(f"Strategy used: {concept_set['metadata']['strategy_used']}")
+        for warning in concept_set['metadata'].get('warnings', []):
+            print(f"Warning: {warning}")
+    else:
+        print(f"Failed: {concept_set['metadata']['reason']}")
+
+asyncio.run(main())
+```
+The returned dictionary includes the `concept_ids` and `metadata` explaining how the set was generated and any warnings to consider.
+
+### CLI Usage for Concept Sets
+You can also generate concept sets directly from the command line.
+
+```bash
+# Set an environment variable with your connection string (optional, but convenient)
+export OMOP_DB_CONNECTION="postgresql://user:pass@localhost/omop"
+
+# Generate the concept set and output as JSON
+athena generate-set "Type 2 Diabetes" --output json
+```
+
+---
+***(New Section Ends Here)***
 
 ## Concept Exploration - Finding Standard Concepts
 
@@ -263,7 +331,6 @@ async def advanced_exploration():
         target_vocabularies=['SNOMED', 'ICD10'],  # Only these vocabularies
         confidence_threshold=0.7                  # High confidence threshold
     )
-
 asyncio.run(advanced_exploration())
 ```
 
@@ -350,7 +417,7 @@ asyncio.run(cross_vocabulary_mapping())
 3. **Specify target vocabularies** - Focus on relevant coding systems
 4. **Explore relationships** - Useful for finding broader/narrower concepts
 5. **Use synonyms** - Helps with alternative terminology
-6. **Monitor exploration depth** - Balance thoroughness with performance
+6. **Monitor and adjust timeout settings** - Especially for complex or large queries
 
 ### Performance Considerations
 
@@ -655,128 +722,65 @@ athena = Athena(timeout=60)  # Increase timeout for complex operations
 ✅ **Memory-efficient processing** for large result sets
 ✅ **Configurable thresholds** for different query types
 
-## Generating Validated Concept Sets
+---
 
-Concept set generation bridges the gap between the Athena API and your local OMOP vocabulary.
-It validates concepts found via the API against your database, optionally expanding the set with
-descendants. The returned metadata explains which strategy was used and lists any warnings.
+## Google BigQuery & OMOP Integration (Python 3.9 Only)
 
-```python
-import asyncio
-from athena_client import Athena
+> **BigQuery support requires Python 3.9 due to upstream dependency constraints.**
+> 
+> - `pybigquery` (required for BigQuery) is only compatible with `sqlalchemy<1.5.0`.
+> - The SDK will not work with BigQuery on Python 3.10+ or SQLAlchemy 2.x.
 
-async def main() -> None:
-    client = Athena()
-    concept_set = await client.generate_concept_set(
-        "type 2 diabetes",
-        db_connection_string="postgresql://user:pass@localhost/omop",
-    )
-    print(concept_set)
+### Installation for BigQuery/OMOP
 
-asyncio.run(main())
-```
+1. **Create a Python 3.9 virtual environment** (recommended):
+   ```bash
+   python3.9 -m venv .venv
+   source .venv/bin/activate
+   pip install --upgrade pip setuptools
+   ```
+2. **Install the SDK with BigQuery extras:**
+   ```bash
+   pip install "athena-client[bigquery]"
+   ```
+   This will install compatible versions of `pybigquery` and `sqlalchemy`.
 
-Command line usage:
+3. **Authenticate with Google Cloud:**
+   ```bash
+   gcloud auth application-default login
+   ```
+   (Requires the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install))
 
-```bash
-athena generate-set "type 2 diabetes" \
-  --db-connection postgresql://user:pass@localhost/omop --output json
-```
+4. **Set your environment variables:**
+   ```bash
+   export GCP_PROJECT_ID=your-gcp-project-id
+   export BIGQUERY_DATASET=your_omop_dataset
+   ```
 
-The `metadata` field indicates the strategy applied (e.g., `Tier 1: Direct Standard Concept`) and
-any warnings encountered.
+5. **Run the example script:**
+   ```bash
+   python examples/bigquery_concept_set_demo.py
+   ```
+   The script will check your Python version and dependencies at runtime, and provide clear error messages if anything is missing.
 
-## CLI Usage
+### Example: Generating a Concept Set with BigQuery
+See [`examples/bigquery_concept_set_demo.py`](examples/bigquery_concept_set_demo.py) for a full, robust example including:
+- Dependency and Python version checks
+- Google Cloud authentication guidance
+- Usage of the Athena client with a BigQuery OMOP CDM
 
-```bash
-# Install CLI dependencies
-pip install "athena-client[cli]"
+---
 
-# Search for concepts
-athena search "aspirin"
+## Troubleshooting
 
-# Get details for a specific concept
-athena details 1127433
+- **Editable install fails with TOML or dependency errors?**
+  - Ensure your `pyproject.toml` is valid and you are using Python 3.9.
+  - Run `pip install --upgrade pip setuptools` before installing.
+- **psycopg2-binary build errors (pg_config not found)?**
+  - On macOS, run `brew install postgresql` to provide `pg_config`.
+- **BigQuery install fails due to SQLAlchemy version conflict?**
+  - Only `sqlalchemy>=1.4.0,<1.5.0` is supported for BigQuery. The SDK will install the correct version if you use the `[bigquery]` extra.
+- **Python version errors?**
+  - BigQuery support is only tested and supported on Python 3.9. Use `pyenv` or a `.python-version` file to enforce this if needed.
 
-# Get a summary with various output formats
-athena summary 1127433 --output yaml
-```
-
-## Configuration
-
-The client can be configured through:
-1. Constructor arguments
-2. Environment variables
-3. A `.env` file
-4. Default values
-
-```python
-# Explicit configuration
-athena = Athena(
-    base_url="https://custom.athena.server/api/v1",
-    token="your-bearer-token",
-    timeout=15,
-    max_retries=5
-)
-```
-
-Or use environment variables:
-```
-ATHENA_BASE_URL=https://custom.athena.server/api/v1
-ATHENA_TOKEN=your-bearer-token
-ATHENA_TIMEOUT_SECONDS=15
-ATHENA_MAX_RETRIES=5
-```
-
-## Advanced Query DSL
-
-For complex queries, use the Query DSL:
-
-```python
-from athena_client.query import Q
-
-# Build complex queries
-q = (Q.term("diabetes") & Q.term("type 2")) | Q.exact('"diabetic nephropathy"')
-
-# Use with search
-results = athena.search(q)
-```
-
-### Property-Based Tests
-
-We use **Hypothesis** for edge-case discovery. New core utilities or parsers **must** include at least one Hypothesis scenario.
-
-## Modern Installation & Packaging
-
-This project uses the modern Python packaging standard with `pyproject.toml` for build and dependency management. You do not need to use `setup.py` for installation or development. Instead, use the following commands:
-
-### Install with pip (recommended)
-
-```bash
-pip install .
-```
-
-Or, for development (editable install with dev dependencies):
-
-> **Note:** For editable installs with extras, make sure you have recent versions of pip and setuptools:
-> ```bash
-> pip install --upgrade pip setuptools
-> ```
-```bash
-pip install -e '.[dev]'
-```
-
-### Why `pyproject.toml`?
-- All build, dependency, and metadata configuration is in `pyproject.toml`.
-- Compatible with modern Python tooling (pip, build, poetry, etc).
-- `setup.py` is only needed for legacy or advanced customizations.
-
-For more details, see [Packaging Python Projects](https://packaging.python.org/en/latest/tutorials/packaging-projects/).
-
-## Documentation
-
-For complete documentation, visit: [https://athena-client.readthedocs.io](https://athena-client.readthedocs.io)
-
-## License
-
-MIT
+---
