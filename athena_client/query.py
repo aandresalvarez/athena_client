@@ -254,6 +254,8 @@ class Q:
             elif self.operator == "NOT":
                 assert self.right is not None
                 return f"NOT ({self.right})"
+            # Gracefully handle unknown operators by returning the raw value
+            return self.value
         else:
             # For basic query types, return the value
             return self.value

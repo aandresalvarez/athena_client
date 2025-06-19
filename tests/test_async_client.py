@@ -256,7 +256,9 @@ class TestAsyncHttpClient:
             with pytest.raises(
                 ImportError, match="backoff is required for the async client"
             ):
-                pass
+                import importlib
+
+                importlib.import_module("athena_client.async_client")
 
 
 class TestAthenaAsyncClient:
@@ -424,4 +426,6 @@ class TestAthenaAsyncClient:
             with pytest.raises(
                 AttributeError, match="httpx is required for the async client"
             ):
-                pass
+                import importlib
+
+                importlib.import_module("athena_client.async_client")
