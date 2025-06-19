@@ -16,7 +16,7 @@ from .settings import get_settings
 logger = logging.getLogger(__name__)
 
 
-def build_headers(method: str, url: str, body: bytes) -> Dict[str, str]:
+def build_headers(method: str, url: str, body: bytes, serialization_module=None, hashes_module=None) -> Dict[str, str]:
     """
     Build authentication headers for Athena API requests.
 
@@ -47,22 +47,28 @@ def build_headers(method: str, url: str, body: bytes) -> Dict[str, str]:
     # Add HMAC signature if private key is available
     if s.ATHENA_PRIVATE_KEY:
         try:
-            nonce = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-            to_sign = f"{method}\n{url}\n\n{nonce}\n{body.decode()}"
-            key = serialization.load_pem_private_key(
-                s.ATHENA_PRIVATE_KEY.encode(), password=None
-            )
-            signing_key: Any = key
-            sig = signing_key.sign(to_sign.encode(), hashes.SHA256())
-            hdrs.update(
-                {"X-Athena-Nonce": nonce, "X-Athena-Hmac": b64encode(sig).decode()}
-            )
-            logger.debug("HMAC signature headers added")
+            if serialization_module is None or hashes_module is None:
+                from cryptography.hazmat.primitives import hashes, serialization
+                serialization_module = serialization
+                hashes_module = hashes
         except ImportError:
             logger.warning(
                 "cryptography package is required for HMAC signing. "
                 "Install with 'pip install \"athena-client[crypto]\"'"
             )
+            return hdrs
+        try:
+            nonce = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            to_sign = f"{method}\n{url}\n\n{nonce}\n{body.decode()}"
+            key = serialization_module.load_pem_private_key(
+                s.ATHENA_PRIVATE_KEY.encode(), password=None
+            )
+            signing_key: Any = key
+            sig = signing_key.sign(to_sign.encode(), hashes_module.SHA256())
+            hdrs.update(
+                {"X-Athena-Nonce": nonce, "X-Athena-Hmac": b64encode(sig).decode()}
+            )
+            logger.debug("HMAC signature headers added")
         except Exception as e:
             logger.error(f"Error generating HMAC signature: {e}")
 

@@ -80,11 +80,12 @@ class TestAuth:
             with (
                 patch("athena_client.auth.datetime", mock_datetime),
                 patch("athena_client.auth.b64encode", mock_b64encode),
-                patch("athena_client.auth.serialization", mock_serialization),
-                patch("athena_client.auth.hashes", mock_hashes),
             ):
-                headers = build_headers("GET", "https://api.example.com/test", b"")
-
+                headers = build_headers(
+                    "GET", "https://api.example.com/test", b"",
+                    serialization_module=mock_serialization,
+                    hashes_module=mock_hashes
+                )
                 assert "X-Athena-Nonce" in headers
                 assert "X-Athena-Hmac" in headers
                 assert headers["X-Athena-Nonce"] == "2023-01-01T00:00:00Z"
@@ -121,11 +122,12 @@ class TestAuth:
             with (
                 patch("athena_client.auth.datetime", mock_datetime),
                 patch("athena_client.auth.b64encode", mock_b64encode),
-                patch("athena_client.auth.serialization", mock_serialization),
-                patch("athena_client.auth.hashes", mock_hashes),
             ):
-                build_headers("POST", "https://api.example.com/test", b"test-body")
-
+                build_headers(
+                    "POST", "https://api.example.com/test", b"test-body",
+                    serialization_module=mock_serialization,
+                    hashes_module=mock_hashes
+                )
                 # Verify the signing string includes the body
                 expected_to_sign = "POST\nhttps://api.example.com/test\n\n2023-01-01T00:00:00Z\ntest-body"
                 mock_key.sign.assert_called_once_with(
@@ -209,16 +211,16 @@ class TestAuth:
             with (
                 patch("athena_client.auth.datetime", mock_datetime),
                 patch("athena_client.auth.b64encode", mock_b64encode),
-                patch("athena_client.auth.serialization", mock_serialization),
-                patch("athena_client.auth.hashes", mock_hashes),
             ):
                 # Test different HTTP methods
                 for method in ["GET", "POST", "PUT", "DELETE"]:
-                    headers = build_headers(method, "https://api.example.com/test", b"")
-
+                    headers = build_headers(
+                        method, "https://api.example.com/test", b"",
+                        serialization_module=mock_serialization,
+                        hashes_module=mock_hashes
+                    )
                     assert "X-Athena-Nonce" in headers
                     assert "X-Athena-Hmac" in headers
-
                     # Verify the signing string includes the method
                     expected_to_sign = f"{method}\nhttps://api.example.com/test\n\n2023-01-01T00:00:00Z\n"
                     mock_key.sign.assert_called_with(
@@ -256,11 +258,12 @@ class TestAuth:
             with (
                 patch("athena_client.auth.datetime", mock_datetime),
                 patch("athena_client.auth.b64encode", mock_b64encode),
-                patch("athena_client.auth.serialization", mock_serialization),
-                patch("athena_client.auth.hashes", mock_hashes),
             ):
-                build_headers("POST", "https://api.example.com/test", b"test-body")
-
+                build_headers(
+                    "POST", "https://api.example.com/test", b"test-body",
+                    serialization_module=mock_serialization,
+                    hashes_module=mock_hashes
+                )
                 # Verify the signing string includes the body
                 expected_to_sign = "POST\nhttps://api.example.com/test\n\n2023-01-01T00:00:00Z\ntest-body"
                 mock_key.sign.assert_called_once_with(
@@ -298,11 +301,12 @@ class TestAuth:
             with (
                 patch("athena_client.auth.datetime", mock_datetime),
                 patch("athena_client.auth.b64encode", mock_b64encode),
-                patch("athena_client.auth.serialization", mock_serialization),
-                patch("athena_client.auth.hashes", mock_hashes),
             ):
-                build_headers("GET", "https://api.example.com/test", b"")
-
+                build_headers(
+                    "GET", "https://api.example.com/test", b"",
+                    serialization_module=mock_serialization,
+                    hashes_module=mock_hashes
+                )
                 # Verify the signing string includes empty body
                 expected_to_sign = (
                     "GET\nhttps://api.example.com/test\n\n2023-01-01T00:00:00Z\n"
