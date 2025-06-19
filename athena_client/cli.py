@@ -4,6 +4,7 @@ Command-line interface for the Athena client.
 This module provides a CLI for interacting with the Athena API.
 """
 
+import asyncio
 import json
 import sys
 from typing import Any, Optional
@@ -231,6 +232,71 @@ def search(
         output_data = results
 
     _format_output(output_data, ctx.obj["output"], ctx.obj.get("console"))
+
+
+@cli.command(name="generate-set")
+@click.argument("query")
+@click.option(
+    "--db-connection",
+    required=True,
+    envvar="OMOP_DB_CONNECTION",
+    help="SQLAlchemy connection string for the OMOP database.",
+)
+@click.option(
+    "--strategy",
+    type=click.Choice(["fallback", "strict"]),
+    default="fallback",
+    help="Generation strategy.",
+)
+@click.option(
+    "--no-descendants",
+    is_flag=True,
+    help="Do not include descendant concepts in the set.",
+)
+@click.pass_context
+def generate_set(
+    ctx: Any,
+    query: str,
+    db_connection: str,
+    strategy: str,
+    no_descendants: bool,
+) -> None:
+    """Generate a validated concept set for a given query."""
+
+    client = _create_client(
+        ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
+    )
+
+    click.echo(f"Generating concept set for '{query}'...")
+
+    try:
+        concept_set = asyncio.run(
+            client.generate_concept_set(
+                query=query,
+                db_connection_string=db_connection,
+                strategy=strategy,
+                include_descendants=not no_descendants,
+            )
+        )
+
+        _format_output(concept_set, ctx.obj["output"], ctx.obj.get("console"))
+
+        metadata = concept_set.get("metadata", {})
+        if metadata.get("status") == "SUCCESS":
+            click.secho(
+                f"\nSuccess! Found {len(concept_set.get('concept_ids', []))} concepts.",
+                fg="green",
+                err=True,
+            )
+            click.secho(f"Strategy used: {metadata.get('strategy_used')}", err=True)
+            for warning in metadata.get("warnings", []):
+                click.secho(f"Warning: {warning}", fg="yellow", err=True)
+        else:
+            click.secho(f"\nFailure: {metadata.get('reason')}", fg="red", err=True)
+
+    except Exception as e:  # pragma: no cover - defensive
+        click.secho(f"An unexpected error occurred: {e}", fg="red", err=True)
+        sys.exit(1)
 
 
 @cli.command()
