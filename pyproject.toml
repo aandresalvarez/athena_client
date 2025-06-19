@@ -61,7 +61,9 @@ dev = [
   "cyclonedx-python-lib>=5.2.0",
   "types-requests",
   "types-PyYAML",
-  "pandas-stubs"
+  "pandas-stubs",
+  "sqlalchemy>=2.0.0",
+  "sqlalchemy-stubs"
 ]
 
 
