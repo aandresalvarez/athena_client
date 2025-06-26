@@ -5,6 +5,36 @@ A production-ready Python SDK for the OHDSI Athena Concepts API.
 
 ## Installation
 
+## Version Compatibility
+
+This library is designed to work with the latest versions of its dependencies to minimize downgrades. The following version ranges are supported:
+
+- **Python**: >= 3.9, < 3.13
+- **SQLAlchemy**: >= 1.4.0 (supports both 1.4.x and 2.x)
+- **pandas**: >= 1.3.0, < 3.0.0
+- **pydantic**: >= 2.0.0
+- **httpx**: >= 0.18.0
+- **cryptography**: >= 36.0.0
+
+### Reducing Dependency Conflicts
+
+To minimize dependency downgrades when installing this library:
+
+1. **Use specific extras**: Install only the features you need
+   ```bash
+   pip install "athena-client[core]"      # Minimal dependencies
+   pip install "athena-client[postgres]"  # Only PostgreSQL support
+   pip install "athena-client[bigquery]"  # Only BigQuery support
+   ```
+
+2. **For BigQuery users**: Use Python 3.9 with SQLAlchemy < 1.5.0
+   ```bash
+   pip install "athena-client[bigquery]"
+   ```
+
+3. **For maximum compatibility**: Use the latest Python and dependency versions
+
+
 ```bash
 pip install athena-client
 ```
@@ -726,7 +756,7 @@ athena = Athena(timeout=60)  # Increase timeout for complex operations
 
 ## Google BigQuery & OMOP Integration (Python 3.9 Only)
 
-> **BigQuery support requires Python 3.9 due to upstream dependency constraints.**
+> **BigQuery support works best with Python 3.9 due to upstream dependency constraints, but SQLAlchemy 2.x is now supported for other databases.**
 > 
 > - `pybigquery` (required for BigQuery) is only compatible with `sqlalchemy<1.5.0`.
 > - The SDK will not work with BigQuery on Python 3.10+ or SQLAlchemy 2.x.
@@ -779,7 +809,7 @@ See [`examples/bigquery_concept_set_demo.py`](examples/bigquery_concept_set_demo
 - **psycopg2-binary build errors (pg_config not found)?**
   - On macOS, run `brew install postgresql` to provide `pg_config`.
 - **BigQuery install fails due to SQLAlchemy version conflict?**
-  - Only `sqlalchemy>=1.4.0,<1.5.0` is supported for BigQuery. The SDK will install the correct version if you use the `[bigquery]` extra.
+  - Only `sqlalchemy>=1.4.0,<1.5.0` is supported for BigQuery (SQLAlchemy 2.x supported for other databases). The SDK will install the correct version if you use the `[bigquery]` extra.
 - **Python version errors?**
   - BigQuery support is only tested and supported on Python 3.9. Use `pyenv` or a `.python-version` file to enforce this if needed.
 

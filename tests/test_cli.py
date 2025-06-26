@@ -326,8 +326,9 @@ class TestCLI:
 
     def test_main_entrypoint(self):
         """Test CLI main entrypoint."""
-        from athena_client.cli import cli
         from click.testing import CliRunner
+
+        from athena_client.cli import cli
 
         runner = CliRunner()
         result = runner.invoke(cli)

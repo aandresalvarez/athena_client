@@ -10,7 +10,7 @@ from .models import ConceptDetails, ConceptRelationsGraph, ConceptRelationship
 
 Athena = AthenaClient
 
-__version__ = "1.0.5"
+__version__ = "1.0.12"
 
 __all__ = [
     "Athena",
