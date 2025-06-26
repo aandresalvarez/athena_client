@@ -2,7 +2,7 @@
 
 import json
 import sys
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -327,8 +327,10 @@ class TestCLI:
     def test_main_entrypoint(self):
         """Test CLI main entrypoint."""
         with patch("athena_client.cli.cli") as mock_cli:
-            from athena_client.cli import main
             import sys
+
+            from athena_client.cli import main
+
             with patch.object(sys, "argv", ["athena"]):
                 main()
             mock_cli.assert_called_once()
@@ -370,7 +372,7 @@ class TestCLI:
         cli_module = importlib.reload(cli_module)
 
         mock_client = Mock()
-        mock_client.generate_concept_set = AsyncMock(
+        mock_client.generate_concept_set = Mock(
             return_value={"concept_ids": [1], "metadata": {"status": "SUCCESS"}}
         )
 
@@ -413,7 +415,7 @@ class TestCLI:
         cli_module = importlib.reload(cli_module)
 
         mock_client = Mock()
-        mock_client.generate_concept_set = AsyncMock(
+        mock_client.generate_concept_set = Mock(
             return_value={
                 "concept_ids": [],
                 "metadata": {"status": "FAILURE", "reason": "bad"},
