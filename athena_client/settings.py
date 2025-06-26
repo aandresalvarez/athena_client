@@ -47,7 +47,7 @@ class _Settings(BaseSettings):
     ATHENA_CHUNK_SIZE: int = 50  # Size for chunking large queries
     ATHENA_MAX_CONCURRENT_CHUNKS: int = 3  # Max concurrent chunk requests
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="")
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="allow")
 
 
 @lru_cache
