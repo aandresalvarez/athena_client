@@ -17,30 +17,29 @@ def test_imports():
         print("✅ Core client imports successful")
     except ImportError as e:
         print(f"❌ Core client import failed: {e}")
-        return False
+        assert False, f"Core client import failed: {e}"
     
     try:
         from athena_client.models import Concept, ConceptDetails
         print("✅ Model imports successful")
     except ImportError as e:
         print(f"❌ Model import failed: {e}")
-        return False
+        assert False, f"Model import failed: {e}"
     
     try:
         from athena_client.query import Q
         print("✅ Query DSL imports successful")
     except ImportError as e:
         print(f"❌ Query DSL import failed: {e}")
-        return False
+        assert False, f"Query DSL import failed: {e}"
     
     try:
         from athena_client.db.sqlalchemy_connector import SQLAlchemyConnector
         print("✅ SQLAlchemy connector imports successful")
     except ImportError as e:
         print(f"❌ SQLAlchemy connector import failed: {e}")
-        return False
-    
-    return True
+        assert False, f"SQLAlchemy connector import failed: {e}"
+
 
 def test_dependency_versions():
     """Test dependency versions."""
@@ -49,36 +48,36 @@ def test_dependency_versions():
     try:
         import sqlalchemy
         print(f"✅ SQLAlchemy version: {sqlalchemy.__version__}")
-        if sqlalchemy.__version__.startswith('2.'):
-            print("   → SQLAlchemy 2.x detected (modern version)")
-        elif sqlalchemy.__version__.startswith('1.4'):
-            print("   → SQLAlchemy 1.4.x detected (compatible version)")
-        else:
-            print(f"   → SQLAlchemy {sqlalchemy.__version__} detected")
+        assert sqlalchemy.__version__.startswith(("2.", "1.4")), (
+            f"Unsupported SQLAlchemy version: {sqlalchemy.__version__}"
+        )
     except ImportError:
         print("❌ SQLAlchemy not installed")
+        assert False, "SQLAlchemy not installed"
     
     try:
         import pandas
         print(f"✅ pandas version: {pandas.__version__}")
     except ImportError:
         print("❌ pandas not installed")
+        assert False, "pandas not installed"
     
     try:
         import pydantic
         print(f"✅ pydantic version: {pydantic.__version__}")
-        if pydantic.__version__.startswith('2.'):
-            print("   → Pydantic 2.x detected (modern version)")
-        else:
-            print(f"   → Pydantic {pydantic.__version__} detected")
+        assert pydantic.__version__.startswith("2."), (
+            f"Unsupported pydantic version: {pydantic.__version__}"
+        )
     except ImportError:
         print("❌ pydantic not installed")
+        assert False, "pydantic not installed"
     
     try:
         import httpx
         print(f"✅ httpx version: {httpx.__version__}")
     except ImportError:
         print("❌ httpx not installed")
+        assert False, "httpx not installed"
 
 def test_basic_functionality():
     """Test basic functionality."""
@@ -110,39 +109,6 @@ def test_basic_functionality():
         )
         print("✅ Model creation successful")
         
-        return True
-        
     except Exception as e:
         print(f"❌ Basic functionality test failed: {e}")
-        return False
-
-def main():
-    """Run all compatibility tests."""
-    print("🚀 Athena Client Compatibility Test")
-    print("=" * 50)
-    
-    success = True
-    
-    # Test imports
-    if not test_imports():
-        success = False
-    
-    # Test dependency versions
-    test_dependency_versions()
-    
-    # Test basic functionality
-    if not test_basic_functionality():
-        success = False
-    
-    print("\n" + "=" * 50)
-    if success:
-        print("✅ All compatibility tests passed!")
-        print("   The library should work with current dependency versions.")
-    else:
-        print("❌ Some compatibility tests failed.")
-        print("   Please check the error messages above.")
-    
-    return 0 if success else 1
-
-if __name__ == "__main__":
-    sys.exit(main()) 
+        assert False, f"Basic functionality test failed: {e}" 

@@ -5,7 +5,6 @@ This module provides configuration settings loaded from environment variables
 or .env files using pydantic-settings.
 """
 
-from functools import lru_cache
 from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,6 +15,8 @@ class _Settings(BaseSettings):
     Configuration settings for the Athena client.
 
     Settings can be provided via environment variables, .env file, or defaults.
+    The settings are designed to be isolated from other applications' environment
+    variables and will only use ATHENA_ prefixed variables.
     """
 
     ATHENA_BASE_URL: str = "https://athena.ohdsi.org/api/v1"
@@ -47,15 +48,44 @@ class _Settings(BaseSettings):
     ATHENA_CHUNK_SIZE: int = 50  # Size for chunking large queries
     ATHENA_MAX_CONCURRENT_CHUNKS: int = 3  # Max concurrent chunk requests
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="allow")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_prefix="", extra="ignore", env_file_encoding="utf-8"
+    )
 
 
-@lru_cache
+_settings_cache: Optional[_Settings] = None
+
+
 def get_settings() -> _Settings:
     """
     Get the settings singleton.
-
+    This function provides a cached instance of _Settings. The cache can be
+    cleared using clear_settings_cache() when environment variables change.
     Returns:
         Cached instance of _Settings.
     """
-    return _Settings()  # cached singleton
+    global _settings_cache
+    if _settings_cache is None:
+        _settings_cache = _Settings()
+    return _settings_cache
+
+
+def clear_settings_cache() -> None:
+    """
+    Clear the settings cache.
+    This function should be called when environment variables change and you
+    want the settings to be reloaded from the environment.
+    """
+    global _settings_cache
+    _settings_cache = None
+
+
+def reload_settings() -> _Settings:
+    """
+    Reload settings from environment variables.
+    This function clears the cache and returns a fresh settings instance.
+    Returns:
+        Fresh instance of _Settings.
+    """
+    clear_settings_cache()
+    return get_settings()

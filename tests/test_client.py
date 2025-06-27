@@ -23,7 +23,7 @@ from athena_client.models import (
 )
 from athena_client.query import Q
 from athena_client.search_result import SearchResult
-from athena_client.settings import get_settings
+from athena_client.settings import clear_settings_cache
 
 
 class TestAthenaClientInitialization:
@@ -54,14 +54,14 @@ class TestAthenaClientInitialization:
     def test_environment_variable_override(self):
         """Test that environment variables override defaults."""
         # Clear the settings cache to ensure environment variables are picked up
-        get_settings.cache_clear()
+        clear_settings_cache()
 
         with patch.dict(os.environ, {"ATHENA_MAX_RETRIES": "7"}):
             client = AthenaClient()
             assert client.max_retries == 7
 
         # Clean up by clearing cache again
-        get_settings.cache_clear()
+        clear_settings_cache()
 
 
 class TestRetryConfiguration:
