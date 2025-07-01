@@ -70,16 +70,30 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
         output: Output format (json, yaml, table, pretty, csv)
         console: Rich console for pretty printing
     """
+    # Convert Pydantic models and SearchResult to dicts/lists for serialization
+    def to_serializable(obj):
+        # If the object has a .to_list() method (e.g., SearchResult), use it
+        if hasattr(obj, "to_list") and callable(getattr(obj, "to_list")):
+            return to_serializable(obj.to_list())
+        if hasattr(obj, "model_dump"):
+            return obj.model_dump()
+        elif isinstance(obj, list):
+            return [to_serializable(item) for item in obj]
+        elif isinstance(obj, dict):
+            return {k: to_serializable(v) for k, v in obj.items()}
+        return obj
+
     if output == "json":
-        if isinstance(data, str):
-            print(data)
+        serializable = to_serializable(data)
+        if isinstance(serializable, str):
+            print(serializable)
         else:
-            print(json.dumps(data, indent=2))
+            print(json.dumps(serializable, indent=2))
     elif output == "yaml":
         try:
             import yaml
 
-            print(yaml.dump(data))
+            print(yaml.dump(to_serializable(data)))
         except ImportError:
             print(
                 "The 'pyyaml' package is required for YAML output. "
@@ -91,13 +105,12 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
             import csv
             import io
 
-            # Convert data to list format if it has a to_list method
-            if hasattr(data, "to_list"):
-                data_list = cast(Any, data).to_list()
-            elif isinstance(data, list):
-                data_list = data
-            elif isinstance(data, dict):
-                data_list = [data]
+            serializable = to_serializable(data)
+            # Only accept list of dicts for CSV
+            if isinstance(serializable, list) and serializable and isinstance(serializable[0], dict):
+                data_list = serializable
+            elif isinstance(serializable, dict):
+                data_list = [serializable]
             else:
                 data_list = []
 
@@ -105,18 +118,14 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
                 print("No results found")
                 return
 
-            # Create CSV output
             output_buffer = io.StringIO()
-            if data_list:
-                fieldnames = data_list[0].keys()
-                writer = csv.DictWriter(output_buffer, fieldnames=fieldnames)
-                writer.writeheader()
-                for item in data_list:
-                    writer.writerow(item)
+            fieldnames = data_list[0].keys()
+            writer = csv.DictWriter(output_buffer, fieldnames=fieldnames)
+            writer.writeheader()
+            for item in data_list:
+                writer.writerow(item)
 
-                print(output_buffer.getvalue())
-            else:
-                print("No results found")
+            print(output_buffer.getvalue())
         except ImportError:
             print("CSV output requires the csv module.")
             sys.exit(1)
@@ -164,11 +173,11 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
         # Use rich's pretty printing
         console.print(data)
     else:
-        # Fall back to regular JSON
-        if isinstance(data, str):
-            print(data)
+        serializable = to_serializable(data)
+        if isinstance(serializable, str):
+            print(serializable)
         else:
-            print(json.dumps(data, indent=2))
+            print(json.dumps(serializable, indent=2))
 
 
 @click.group()
@@ -238,6 +247,12 @@ def cli(
 )
 @click.option("--domain", help="Filter by domain")
 @click.option("--vocabulary", help="Filter by vocabulary")
+@click.option(
+    "--output", "-o",
+    type=click.Choice(["json", "yaml", "table", "pretty", "csv"]),
+    default=None,
+    help="Output format (overrides global setting)",
+)
 @click.pass_context
 def search(
     ctx: Any,
@@ -248,6 +263,7 @@ def search(
     limit: Optional[int],
     domain: Optional[str],
     vocabulary: Optional[str],
+    output: Optional[str],
 ) -> None:
     """Search for concepts in the Athena vocabulary."""
     client = _create_client(
@@ -280,7 +296,9 @@ def search(
     else:
         output_data = results
 
-    _format_output(output_data, ctx.obj["output"], ctx.obj.get("console"))
+    # Determine output format: command-line option overrides global
+    output_format = output or ctx.obj.get("output", "table")
+    _format_output(output_data, output_format, ctx.obj.get("console"))
 
 
 @cli.command(name="generate-set")

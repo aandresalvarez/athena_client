@@ -2,7 +2,9 @@
 
 [![SBOM](https://img.shields.io/badge/SBOM-available-blue)](sbom.json)
 
-A production-ready Python SDK for interacting with the OHDSI Athena Concepts API. Easily search, explore, and analyze medical concepts without any additional setup.
+An unofficial Python SDK for interacting with the OHDSI Athena Concepts API. Easily search, explore, and analyze medical concepts without any additional setup.  
+Developed by Alvaro A. Alvarez P. (alvaro1@stanford.edu).  
+This project is provided as-is, without warranty of any kind.
 
 > **Looking for advanced concept exploration, mapping, and best practices?**
 > See the [Concept Exploration Guide](CONCEPT_EXPLORATION_GUIDE.md) for a comprehensive tutorial on robust usage, advanced workflows, and real-world examples.
@@ -154,6 +156,20 @@ athena generate-set "Type 2 Diabetes" --output json
 * **Dependency installation problems:** Ensure Python version compatibility and correct extras.
 * **PostgreSQL build errors:** Install PostgreSQL development tools (`brew install postgresql` on macOS).
 * **BigQuery SQLAlchemy conflicts:** Only use Python 3.9 with BigQuery integration.
+
+---
+
+## Exporting CLI Results to Files (JSON, YAML, CSV)
+
+You can export CLI search results to various formats:
+
+```bash
+athena search "aspirin" --output json | tail -n +2 > aspirin_concepts.json
+athena search "aspirin" --output yaml | tail -n +2 > aspirin_concepts.yaml
+athena search "aspirin" --output csv  | tail -n +2 > aspirin_concepts.csv
+```
+
+> **Note:** The `tail -n +2` removes warning lines (such as large query warnings) to ensure the output file is valid for the chosen format.
 
 ---
 

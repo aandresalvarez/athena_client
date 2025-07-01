@@ -83,7 +83,12 @@ athena relationships 1127433
 athena graph 1127433 --depth 3
 athena summary 1127433
 athena search "diabetes" --domain Condition --vocabulary SNOMED
-athena search "aspirin" --output json > aspirin_concepts.json
+athena search "aspirin" --output json | tail -n +2 > aspirin_concepts.json
+# To export in YAML or CSV, change the output format:
+athena search "aspirin" --output yaml | tail -n +2 > aspirin_concepts.yaml
+athena search "aspirin" --output csv | tail -n +2 > aspirin_concepts.csv
+
+# Note: The 'tail -n +2' removes warning lines to ensure valid output files.
 ```
 
 ---
