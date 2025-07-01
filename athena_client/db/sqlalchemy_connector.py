@@ -1,7 +1,13 @@
+try:
+    # Only import these if needed, do not import sqlalchemy at the top level
+    from sqlalchemy import bindparam, create_engine, text
+    from sqlalchemy.engine import Engine
+except ImportError as e:
+    raise ImportError(
+        "sqlalchemy is required for database features. Install with: "
+        "pip install athena-client[db] or pip install sqlalchemy"
+    ) from e
 from typing import Dict, List
-
-from sqlalchemy import bindparam, create_engine, text
-from sqlalchemy.engine import Engine
 
 
 class SQLAlchemyConnector:

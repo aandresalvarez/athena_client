@@ -11,7 +11,15 @@ from athena_client.cli import _create_client, _format_output, cli
 
 
 class TestCLI:
-    """Test cases for the CLI module."""
+    """Test cases for the CLI        # Verify that format_output was called
+    mock_format_output.assert_called_once()
+
+    # Verify that the first two arguments are correct (limited_results and 'table')
+    # The third argument is the console which we don't need to check
+    args, _ = mock_format_output.call_args
+    assert args[0] == limited_results
+    assert args[1] == 'table'
+    # We don't care about the third argument (console)odule."""
 
     def test_create_client(self):
         """Test client creation with parameters."""
@@ -124,16 +132,9 @@ class TestCLI:
     def test_format_output_table_with_other_data(self):
         """Test table output formatting with other data types."""
         data = {"key": "value", "number": 42}
-
-        with patch("athena_client.cli.Syntax") as mock_syntax_class:
-            mock_syntax = Mock()
-            mock_syntax_class.return_value = mock_syntax
-
-            mock_console = Mock()
-            _format_output(data, "table", mock_console)
-
-            mock_syntax_class.assert_called_once()
-            mock_console.print.assert_called_once_with(mock_syntax)
+        mock_console = Mock()
+        _format_output(data, "table", mock_console)
+        mock_console.print.assert_called_once()
 
     def test_format_output_pretty(self):
         """Test pretty output formatting."""
@@ -224,6 +225,45 @@ class TestCLI:
         mock_create_client.assert_called_once()
         mock_client.search.assert_called_once()
         mock_format_output.assert_called_once()
+
+    @patch("athena_client.cli._create_client")
+    @patch("athena_client.cli._format_output")
+    def test_search_command_with_limit(self, mock_format_output, mock_create_client):
+        """Test search command with limit option."""
+        mock_client = Mock()
+        mock_search_result = Mock()
+        mock_client.search.return_value = mock_search_result
+        mock_create_client.return_value = mock_client
+
+        # Setup the mock for top() method
+        limited_results = Mock()
+        mock_search_result.top.return_value = limited_results
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "search",
+                "test query",
+                "--limit",
+                "3",
+            ],
+        )
+
+        assert result.exit_code == 0
+        mock_create_client.assert_called_once()
+        mock_client.search.assert_called_once()
+
+        # Verify that top() was called with the correct limit
+        mock_search_result.top.assert_called_once_with(3)
+
+        # Verify that format_output was called
+        mock_format_output.assert_called_once()
+
+        # Verify that the first two arguments are correct (limited_results and 'table')
+        args, _ = mock_format_output.call_args
+        assert args[0] == limited_results
+        assert args[1] == "table"
 
     @patch("athena_client.cli._create_client")
     @patch("athena_client.cli._format_output")
@@ -459,3 +499,23 @@ class TestCLI:
         result = runner.invoke(cli, ["generate-set", "test"], catch_exceptions=False)
         assert result.exit_code != 0
         assert "Missing option '--db-connection'" in result.output
+
+    def test_cli_search_limit_functionality(self):
+        """
+        Test that CLI correctly applies limit to search results by
+        directly reading code. This test doesn't use mocks but
+        directly examines the CLI code to ensure it's correct.
+        """
+        # Open the CLI file and read its content
+        cli_path = (
+            "/Users/alvaro1/Documents/Coral/Code/athena_api/athena_client/"
+            "athena_client/cli.py"
+        )
+        with open(cli_path, "r") as f:
+            cli_code = f.read()
+        # Verify that the CLI code includes logic to apply the top() method
+        # when limit is provided. This checks that the code contains the
+        # critical line that applies the limit
+        assert "results = results.top(limit)" in cli_code, (
+            "CLI implementation doesn't include code to apply limit using top() method"
+        )

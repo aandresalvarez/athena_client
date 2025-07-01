@@ -19,7 +19,6 @@ dependencies = [
     "pydantic-settings",
     "httpx>=0.18.0",
     "backoff>=2.0.0",
-    "sqlalchemy>=1.4.0",
     "pandas>=1.3.0,<3.0.0",
     "click>=8.0.0",
     "rich>=10.0.0",
