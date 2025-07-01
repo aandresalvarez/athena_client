@@ -91,6 +91,54 @@ athena search "aspirin" --output csv | tail -n +2 > aspirin_concepts.csv
 # Note: The 'tail -n +2' removes warning lines to ensure valid output files.
 ```
 
+## Athena Search Command Options
+
+The `athena search` command provides flexible options for finding concepts in the OHDSI Athena vocabulary. Here are the most important options and what they return:
+
+| Option                | Description                                                      | Example Usage                                  | What is Returned                                      |
+|-----------------------|------------------------------------------------------------------|------------------------------------------------|-------------------------------------------------------|
+| `query` (positional)  | The search term or phrase.                                        | `athena search "aspirin"`                     | Concepts matching the query (default: 20 per page)    |
+| `--limit N`           | Limit the number of results returned (applies after filtering).   | `athena search "aspirin" --limit 3`           | The first N matching concepts                         |
+| `--output FORMAT`     | Output format: `json`, `yaml`, `csv`, `table`, or `pretty`.       | `athena search "aspirin" --output json`       | Results in the specified format                       |
+| `--domain DOMAIN`     | Filter results by domain (e.g., `Condition`, `Drug`).             | `athena search "diabetes" --domain Condition` | Only concepts in the specified domain                 |
+| `--vocabulary VOCAB`  | Filter by vocabulary (e.g., `SNOMED`, `RxNorm`, `ICD10`).         | `athena search "diabetes" --vocabulary SNOMED`| Only concepts from the specified vocabulary           |
+| `--page-size N`       | Number of results per page (default: 20).                         | `athena search "aspirin" --page-size 50`      | Up to N concepts per page                             |
+| `--page N`            | Page number (0-indexed).                                          | `athena search "aspirin" --page 2`            | Concepts from the Nth page                            |
+| `--fuzzy/--no-fuzzy`  | Enable or disable fuzzy matching (default: off).                  | `athena search "asprin" --fuzzy`              | Concepts matching similar terms                       |
+
+**Notes:**
+- `--limit` restricts the total number of results shown, regardless of page size.
+- `--output` controls the format for display or file export.
+- You can combine options for powerful queries, e.g.:
+  ```bash
+  athena search "diabetes" --domain Condition --vocabulary SNOMED --limit 5 --output json
+  ```
+- For exporting, you can pipe the output to a file:
+  ```bash
+  athena search "aspirin" --output csv | tail -n +2 > aspirin_concepts.csv
+  ```
+
+For a full list of options, run:
+```bash
+athena search --help
+```
+
+---
+
+## Other Athena CLI Methods and Their Outputs
+
+| Command                        | Description                                      | What is Returned                                 |
+|--------------------------------|--------------------------------------------------|--------------------------------------------------|
+| `athena details <concept_id>`  | Show details for a specific concept              | Full details for the given concept (JSON/table)  |
+| `athena relationships <id>`    | Show relationships for a concept                 | List of related concepts and relationship types   |
+| `athena graph <id> --depth N`  | Show a concept graph up to a certain depth       | Graph structure (JSON/table) of related concepts |
+| `athena summary <id>`          | Show a summary for a concept                     | Summary including details, relationships, graph  |
+| `athena generate-set <query>`  | Generate a validated concept set (experimental)  | Concept set for the query (JSON)                 |
+
+**Notes:**
+- All commands support `--output` for format control where applicable.
+- For more details on each command, run `athena <command> --help`.
+
 ---
 
 ## 4. Advanced: Database Integration (Experimental)

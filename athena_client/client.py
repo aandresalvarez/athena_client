@@ -151,7 +151,7 @@ class AthenaClient:
 
         # Estimate query size and provide warnings for large queries
         estimated_size = estimate_query_size(query_str)
-        warning = format_large_query_warning(query_str, estimated_size)
+        warning = format_large_query_warning(query_str, estimated_size, size)
         if warning:
             print(warning)
 
