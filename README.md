@@ -182,6 +182,4 @@ athena search "aspirin" --output csv  | tail -n +2 > aspirin_concepts.csv
 * **httpx:** >= 0.18.0
 * **cryptography:** >= 36.0.0
 
----
-
-This README provides clarity on basic use, separates experimental features, and outlines recommended practices clearly.
+ 
