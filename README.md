@@ -9,6 +9,9 @@ This project is provided as-is, without warranty of any kind.
 > **Looking for advanced concept exploration, mapping, and best practices?**
 > See the [Concept Exploration Guide](CONCEPT_EXPLORATION_GUIDE.md) for a comprehensive tutorial on robust usage, advanced workflows, and real-world examples.
 
+> **Responsible Usage Notice:**
+> Please use this package responsibly. Avoid making excessive or automated requests to the Athena API, as this may result in your IP being rate-limited or blocked by the API provider. Always use filters and limits where possible, and respect the terms of service of the OHDSI Athena API.
+
 ## Installation
 
 ### Basic Installation (Recommended)
@@ -182,4 +185,4 @@ athena search "aspirin" --output csv  | tail -n +2 > aspirin_concepts.csv
 * **httpx:** >= 0.18.0
 * **cryptography:** >= 36.0.0
 
- 
+
