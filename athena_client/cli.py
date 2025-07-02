@@ -70,10 +70,11 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
         output: Output format (json, yaml, table, pretty, csv)
         console: Rich console for pretty printing
     """
+
     # Convert Pydantic models and SearchResult to dicts/lists for serialization
-    def to_serializable(obj):
+    def to_serializable(obj: object) -> Any:
         # If the object has a .to_list() method (e.g., SearchResult), use it
-        if hasattr(obj, "to_list") and callable(getattr(obj, "to_list")):
+        if hasattr(obj, "to_list") and callable(obj.to_list):
             return to_serializable(obj.to_list())
         if hasattr(obj, "model_dump"):
             return obj.model_dump()
@@ -107,7 +108,11 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
 
             serializable = to_serializable(data)
             # Only accept list of dicts for CSV
-            if isinstance(serializable, list) and serializable and isinstance(serializable[0], dict):
+            if (
+                isinstance(serializable, list)
+                and serializable
+                and isinstance(serializable[0], dict)
+            ):
                 data_list = serializable
             elif isinstance(serializable, dict):
                 data_list = [serializable]
@@ -130,7 +135,8 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
             print("CSV output requires the csv module.")
             sys.exit(1)
     elif output == "table" and console is not None and rich is not None:
-        # Try to convert any object with model_dump/model_dump_json to dict/list for table rendering
+        # Try to convert any object with model_dump/model_dump_json to dict/list
+        # for table rendering
         if hasattr(data, "to_list") and Table is not None:
             results = cast(Any, data).to_list()
         elif isinstance(data, list) and data and hasattr(data[0], "model_dump"):
@@ -248,7 +254,8 @@ def cli(
 @click.option("--domain", help="Filter by domain")
 @click.option("--vocabulary", help="Filter by vocabulary")
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     type=click.Choice(["json", "yaml", "table", "pretty", "csv"]),
     default=None,
     help="Output format (overrides global setting)",
@@ -267,14 +274,17 @@ def search(
 ) -> None:
     """Search for concepts in the Athena vocabulary."""
     click.echo(
-        "[Responsible Usage] Please avoid excessive or automated requests. Abuse may result in your IP being blocked by the Athena API provider. Use filters and limits where possible."
+        "[Responsible Usage] Please avoid excessive or automated requests. "
+        "Abuse may result in your IP being blocked by the Athena API provider. "
+        "Use filters and limits where possible."
     )
 
     client = _create_client(
         ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
     )
 
-    # If limit is set and less than page_size, use limit for page_size to minimize data transfer
+    # If limit is set and less than page_size, use limit for page_size.
+    # This minimizes data transfer.
     effective_page_size = page_size
     if limit is not None and (page_size is None or limit < page_size):
         effective_page_size = limit
@@ -288,7 +298,8 @@ def search(
         vocabulary=vocabulary,
     )
 
-    # Apply limit if specified (in case server returns more than requested, or for future-proofing)
+    # Apply limit if specified (in case server returns more than requested).
+    # This is also for future-proofing.
     limited_results: Optional[List[Concept]] = None
     if limit is not None:
         limited_results = results.top(limit)

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional
 
 try:
     import pandas as pd
+
     PANDAS_AVAILABLE = True
 except ImportError:
     PANDAS_AVAILABLE = False
@@ -78,7 +79,7 @@ class SearchResult:
                 "pandas is required for DataFrame output. "
                 "Install with: pip install 'athena-client[pandas]'"
             )
-        
+
         data = self.to_list()
         return pd.DataFrame(data)
 

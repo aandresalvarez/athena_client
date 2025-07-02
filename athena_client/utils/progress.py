@@ -230,9 +230,12 @@ def get_operation_timeout(operation_type: str, query_size: Optional[int] = None)
     return base_timeout
 
 
-def format_large_query_warning(query: str, estimated_size: int, requested_size: Optional[int] = None) -> str:
+def format_large_query_warning(
+    query: str, estimated_size: int, requested_size: Optional[int] = None
+) -> str:
     """
-    Generate a user-friendly warning for large queries, but only show a warning if the user is likely to download a large number of results.
+    Generate a user-friendly warning for large queries, but only show a warning if
+    the user is likely to download a large number of results.
 
     Args:
         query: The search query
@@ -245,7 +248,11 @@ def format_large_query_warning(query: str, estimated_size: int, requested_size: 
     # If a small number of results is requested, only show an informational note
     if requested_size is not None and requested_size < 100:
         if estimated_size >= 1000:
-            return f"ℹ️  Note: Query '{query}' matches many concepts (estimated {estimated_size:,}+), but only {requested_size} will be downloaded."
+            return (
+                f"\u2139\ufe0f  Note: Query '{query}' matches many concepts "
+                f"(estimated {estimated_size:,}+), but only {requested_size} will be "
+                f"downloaded."
+            )
         return ""
 
     # Otherwise, show the original warning for large queries

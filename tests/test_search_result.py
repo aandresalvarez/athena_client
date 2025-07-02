@@ -218,10 +218,9 @@ class TestSearchResult:
         assert result == mock_df
         mock_pd.DataFrame.assert_called_once()
 
-    @patch("athena_client.search_result.pd")
-    def test_to_df_import_error(self, mock_pd):
+    @patch("athena_client.search_result.PANDAS_AVAILABLE", False)
+    def test_to_df_import_error(self):
         """Test converting to DataFrame when pandas is not available."""
-        mock_pd.DataFrame.side_effect = ImportError("No module named 'pandas'")
 
         with pytest.raises(ImportError) as exc_info:
             self.search_result.to_df()

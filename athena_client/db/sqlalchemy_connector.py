@@ -2,6 +2,7 @@ try:
     # Only import these if needed, do not import sqlalchemy at the top level
     from sqlalchemy import bindparam, create_engine, text
     from sqlalchemy.engine import Engine
+
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     SQLALCHEMY_AVAILABLE = False

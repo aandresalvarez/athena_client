@@ -507,9 +507,10 @@ class TestCLI:
         directly examines the CLI code to ensure it's correct.
         """
         # Open the CLI file and read its content
-        cli_path = (
-            "/Users/alvaro1/Documents/Coral/Code/athena_api/athena_client/"
-            "athena_client/cli.py"
+        import os
+
+        cli_path = os.path.join(
+            os.path.dirname(__file__), "..", "athena_client", "cli.py"
         )
         with open(cli_path, "r") as f:
             cli_code = f.read()
