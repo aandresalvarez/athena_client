@@ -21,7 +21,6 @@ except ImportError as e:
     sys.exit(1)
 
 from rich.console import Console
-from rich.syntax import Syntax
 from rich.table import Table
 
 from athena_client.models import Concept
@@ -360,8 +359,7 @@ def generate_set(
         metadata = concept_set.get("metadata", {})
         if metadata.get("status") == "SUCCESS":
             click.secho(
-                f"\nSuccess! Found {len(concept_set.get('concept_ids', []))} "
-                "concepts.",
+                f"\nSuccess! Found {len(concept_set.get('concept_ids', []))} concepts.",
                 fg="green",
                 err=True,
             )

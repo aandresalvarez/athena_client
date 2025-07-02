@@ -1357,7 +1357,7 @@ class TestDatabaseIntegration:
         with pytest.raises(RuntimeError):
             client.validate_local_concepts([1])
 
-    @patch("athena_client.client.SQLAlchemyConnector")
+    @patch("athena_client.db.sqlalchemy_connector.SQLAlchemyConnector")
     @patch("athena_client.client.AthenaAsyncClient")
     def test_generate_concept_set_facade(
         self,

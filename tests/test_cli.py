@@ -351,18 +351,12 @@ class TestCLI:
 
     def test_rich_import_error(self):
         """Test ImportError handling for rich."""
-        import importlib
 
         module_name = "athena_client.cli"
         sys.modules.pop(module_name, None)
         with patch.dict("sys.modules", {"rich": None}):
-            import athena_client.cli
-
-            importlib.reload(athena_client.cli)
-            assert athena_client.cli.rich is None
-            assert athena_client.cli.Console is None
-            assert athena_client.cli.Syntax is None
-            assert athena_client.cli.Table is None
+            with pytest.raises(SystemExit):
+                __import__("athena_client.cli")
 
     def test_main_entrypoint(self):
         """Test CLI main entrypoint."""

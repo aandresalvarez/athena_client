@@ -1,4 +1,4 @@
-.PHONY: help install quality test cov bandit cyclonedx
+.PHONY: help install quality test cov bandit cyclonedx release bump-version
 
 help:
 	@echo "Commands:"
@@ -6,6 +6,8 @@ help:
 	@echo "  quality    - ruff, mypy, bandit"
 	@echo "  test       - pytest"
 	@echo "  cov        - pytest with coverage"
+	@echo "  release    - commit, tag, and push for GitHub Actions publishing"
+	@echo "  bump-version - update version in pyproject.toml and athena_client/__init__.py"
 
 install:
 	hatch env create
@@ -26,3 +28,25 @@ bandit:
 cyclonedx:
 	@echo "📦  Generating CycloneDX SBOM..."
 	@hatch run cyclonedx-py environment --of json -o sbom.json
+
+release:
+	@echo "🚀  Preparing release..."
+	@echo "Current version: $(shell grep '^version =' pyproject.toml | cut -d'"' -f2)"
+	@echo "Please confirm the version above is correct and you want to release it."
+	@read -p "Press Enter to continue or Ctrl+C to abort..."
+	@echo "📝  Adding all changes..."
+	@git add .
+	@echo "💾  Committing changes..."
+	@git commit -m "Release version $(shell grep '^version =' pyproject.toml | cut -d'"' -f2) - Fix conditional imports and improve dependency management"
+	@echo "🏷️   Creating tag v$(shell grep '^version =' pyproject.toml | cut -d'"' -f2)..."
+	@git tag -a v$(shell grep '^version =' pyproject.toml | cut -d'"' -f2) -m "Release version $(shell grep '^version =' pyproject.toml | cut -d'"' -f2)"
+	@echo "📤  Pushing to GitHub..."
+	@git push origin main
+	@git push origin v$(shell grep '^version =' pyproject.toml | cut -d'"' -f2)
+	@echo "✅  Release pushed! GitHub Actions will handle the publishing."
+
+bump-version:
+	@read -p "Enter new version: " v; \
+	sed -i '' "s/^version = \".*\"/version = \"$$v\"/" pyproject.toml; \
+	sed -i '' "s/^__version__ = \".*\"/__version__ = \"$$v\"/" athena_client/__init__.py; \
+	echo "Version updated to $$v in pyproject.toml and athena_client/__init__.py"

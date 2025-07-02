@@ -659,6 +659,8 @@ class AthenaClient:
             token=str(self.http.session.headers.get("Authorization", "")),
         )
 
+        from .db.sqlalchemy_connector import SQLAlchemyConnector
+
         db_connector = SQLAlchemyConnector.from_connection_string(db_connection_string)
         async_client.set_database_connector(db_connector)
 
