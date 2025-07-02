@@ -9,26 +9,20 @@ import json
 import sys
 from typing import Any, List, Optional, cast
 
+# Check for required dependencies at import time
 try:
     import click
-except ImportError:
-    click = None  # type: ignore
+    import rich
+except ImportError as e:
     print(
-        "The 'click' package is required for the CLI. "
+        f"Missing required dependency: {e.name}. "
         "Install with 'pip install \"athena-client[cli]\"'"
     )
     sys.exit(1)
 
-try:
-    import rich
-    from rich.console import Console
-    from rich.syntax import Syntax
-    from rich.table import Table
-except ImportError:
-    rich = None  # type: ignore
-    Console = None  # type: ignore
-    Syntax = None  # type: ignore
-    Table = None  # type: ignore
+from rich.console import Console
+from rich.syntax import Syntax
+from rich.table import Table
 
 from athena_client.models import Concept
 
@@ -349,8 +343,7 @@ def generate_set(
         ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
     )
 
-    if click is not None:
-        click.echo(f"Generating concept set for '{query}'...")
+    click.echo(f"Generating concept set for '{query}'...")
 
     try:
         concept_set = asyncio.run(
@@ -366,37 +359,34 @@ def generate_set(
 
         metadata = concept_set.get("metadata", {})
         if metadata.get("status") == "SUCCESS":
-            if click is not None:
-                click.secho(
-                    f"\nSuccess! Found {len(concept_set.get('concept_ids', []))} "
-                    "concepts.",
-                    fg="green",
-                    err=True,
-                )
-                click.secho(
-                    f"Strategy used: {metadata.get('strategy_used')}",
-                    err=True,
-                )
-                for warning in metadata.get("warnings", []):
-                    click.secho(
-                        f"Warning: {warning}",
-                        fg="yellow",
-                        err=True,
-                    )
-        else:
-            if click is not None:
-                click.secho(
-                    f"\nFailure: {metadata.get('reason')}",
-                    fg="red",
-                    err=True,
-                )
-    except Exception as e:  # pragma: no cover - defensive
-        if click is not None:
             click.secho(
-                f"An unexpected error occurred: {e}",
+                f"\nSuccess! Found {len(concept_set.get('concept_ids', []))} "
+                "concepts.",
+                fg="green",
+                err=True,
+            )
+            click.secho(
+                f"Strategy used: {metadata.get('strategy_used')}",
+                err=True,
+            )
+            for warning in metadata.get("warnings", []):
+                click.secho(
+                    f"Warning: {warning}",
+                    fg="yellow",
+                    err=True,
+                )
+        else:
+            click.secho(
+                f"\nFailure: {metadata.get('reason')}",
                 fg="red",
                 err=True,
             )
+    except Exception as e:  # pragma: no cover - defensive
+        click.secho(
+            f"An unexpected error occurred: {e}",
+            fg="red",
+            err=True,
+        )
         sys.exit(1)
 
 

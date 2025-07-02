@@ -99,6 +99,8 @@ dependencies = [
 ]
 
 [project.scripts]
+# CLI scripts are only available when athena-client[cli] is installed
+# These will be conditionally installed based on available dependencies
 athena = "athena_client.cli:main"
 athena-client = "athena_client.cli:main"
 

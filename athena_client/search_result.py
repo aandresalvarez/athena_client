@@ -17,7 +17,7 @@ except ImportError:
 from .models import Concept, ConceptSearchResponse
 
 if TYPE_CHECKING:
-    pass
+    import pandas as pd
 
 
 class SearchResult:
@@ -68,7 +68,7 @@ class SearchResult:
         """
         return self._response.model_dump_json()
 
-    def to_df(self) -> pd.DataFrame:
+    def to_df(self) -> "pd.DataFrame":
         """Convert results to a pandas DataFrame.
 
         Returns:

@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from .async_client import AthenaAsyncClient
 from .db.base import DatabaseConnector
-from .db.sqlalchemy_connector import SQLAlchemyConnector
 from .exceptions import APIError, AthenaError
 from .http import HttpClient
 from .models import (
