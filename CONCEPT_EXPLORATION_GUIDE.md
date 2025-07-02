@@ -8,17 +8,17 @@ This guide is your comprehensive resource for using the `athena-client` Python S
 
 ### Lightweight Installation (Recommended)
 
-Install the core package with minimal dependencies:
+Install the core package with CLI and minimal dependencies:
 
 ```bash
 pip install athena-client
 ```
 
-This installs only 5 essential packages (~2MB) for basic API functionality.
+This installs the essential packages (~4MB) for basic API functionality and command-line interface.
 
 ### Full Installation
 
-For all features including CLI, pandas support, and database integration:
+For all features including pandas support and database integration:
 
 ```bash
 pip install "athena-client[full]"
@@ -28,8 +28,6 @@ pip install "athena-client[full]"
 
 Install only the features you need:
 
-- **CLI Interface:**
-  - `pip install "athena-client[cli]"` - Command-line interface
 - **Data Analysis:**
   - `pip install "athena-client[pandas]"` - pandas DataFrame support
 - **Format Support:**

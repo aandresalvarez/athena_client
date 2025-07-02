@@ -16,13 +16,13 @@ This project is provided as-is, without warranty of any kind.
 
 ### Lightweight Installation (Recommended)
 
-For core functionality with minimal dependencies:
+For core functionality with CLI and minimal dependencies:
 
 ```bash
 pip install athena-client
 ```
 
-This installs only the essential dependencies (5 packages) needed for basic Athena API operations like concept search and exploration.
+This installs the essential dependencies (8 packages) needed for basic Athena API operations and command-line interface.
 
 ### Full Installation
 
@@ -34,10 +34,9 @@ pip install "athena-client[full]"
 
 ### Individual Extras
 
-Install only the features you need:
+Install additional features you need:
 
 ```bash
-pip install "athena-client[cli]"      # Command-line interface
 pip install "athena-client[pandas]"   # pandas DataFrame support  
 pip install "athena-client[yaml]"     # YAML format support
 pip install "athena-client[crypto]"   # HMAC authentication
@@ -373,13 +372,12 @@ athena search "aspirin" --output json | tail -n +2 > aspirin.json
 
 | Installation Method | Dependencies | Size | Features |
 |-------------------|-------------|------|----------|
-| `pip install athena-client` | 5 packages | ~2MB | Core API functionality |
-| `pip install "athena-client[cli]"` | +2 packages | ~5MB | + Command-line interface |
+| `pip install athena-client` | 8 packages | ~4MB | Core API functionality + Command-line interface |
 | `pip install "athena-client[pandas]"` | +1 package | ~15MB | + DataFrame support |
 | `pip install "athena-client[yaml]"` | +1 package | ~1MB | + YAML format support |
 | `pip install "athena-client[crypto]"` | +1 package | ~4MB | + HMAC authentication |
 | `pip install "athena-client[db]"` | +2 packages | ~3MB | + Database integration |
-| `pip install "athena-client[full]"` | +6 packages | ~25MB | All features |
+| `pip install "athena-client[full]"` | +5 packages | ~25MB | All features |
 
 ---
 
@@ -500,7 +498,6 @@ results = athena.search("aspirin", auto_retry=False)
 You can export CLI search results to various formats:
 
 ```bash
-# Install CLI first: pip install "athena-client[cli]"
 # For YAML support: pip install "athena-client[yaml]"
 
 athena search "aspirin" --output json | tail -n +2 > aspirin_concepts.json
