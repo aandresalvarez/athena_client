@@ -28,7 +28,7 @@ def get_sqlalchemy_connector():
             "Install with: pip install 'athena-client[db]'"
         )
 
-__version__ = "1.0.14"
+__version__ = "1.0.21"
 
 __all__ = [
     "Athena",
