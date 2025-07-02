@@ -3,6 +3,12 @@
 Comprehensive demo showcasing the robust athena-client library.
 
 This demo demonstrates all the working features with the real Athena API.
+
+This example works with the lightweight installation:
+pip install athena-client
+
+For additional features like pandas DataFrames, install:
+pip install "athena-client[pandas]"
 """
 import sys
 import os

@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """
 Simple demo showcasing the athena-client library working with the real Athena API.
+
+This example demonstrates core functionality that works with the lightweight installation:
+pip install athena-client
+
+For additional features like pandas DataFrames, install:
+pip install "athena-client[pandas]"
 """
 import sys
 import os

@@ -2,11 +2,9 @@ try:
     # Only import these if needed, do not import sqlalchemy at the top level
     from sqlalchemy import bindparam, create_engine, text
     from sqlalchemy.engine import Engine
-except ImportError as e:
-    raise ImportError(
-        "sqlalchemy is required for database features. Install with: "
-        "pip install athena-client[db] or pip install sqlalchemy"
-    ) from e
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    SQLALCHEMY_AVAILABLE = False
 from typing import Dict, List
 
 
@@ -14,6 +12,11 @@ class SQLAlchemyConnector:
     """Database connector using SQLAlchemy Core."""
 
     def __init__(self, engine: Engine) -> None:
+        if not SQLALCHEMY_AVAILABLE:
+            raise ImportError(
+                "sqlalchemy is required for database features. Install with: "
+                "pip install athena-client[db] or pip install sqlalchemy"
+            )
         self._engine = engine
 
     def validate_concepts(self, concept_ids: List[int]) -> List[int]:
@@ -83,5 +86,10 @@ class SQLAlchemyConnector:
 
     @staticmethod
     def from_connection_string(connection_string: str) -> "SQLAlchemyConnector":
+        if not SQLALCHEMY_AVAILABLE:
+            raise ImportError(
+                "sqlalchemy is required for database features. Install with: "
+                "pip install athena-client[db] or pip install sqlalchemy"
+            )
         engine = create_engine(connection_string)
         return SQLAlchemyConnector(engine)

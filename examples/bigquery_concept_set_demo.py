@@ -8,6 +8,9 @@ set by connecting to an OMOP CDM hosted in Google BigQuery.
 Prerequisites:
 1.  Install the necessary client libraries:
     pip install "athena-client[bigquery]"
+    
+    Note: This example requires the BigQuery extra which includes additional dependencies.
+    For core functionality only, use: pip install athena-client
 
 2.  Authenticate with Google Cloud. The simplest way for local development
     is to use the gcloud CLI:

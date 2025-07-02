@@ -9,6 +9,9 @@ This script demonstrates the ConceptExplorer with:
 - Configurable exploration parameters
 - Enhanced error handling
 
+This example works with the lightweight installation:
+pip install athena-client
+
 Usage:
     python concept_exploration_demo.py
 """

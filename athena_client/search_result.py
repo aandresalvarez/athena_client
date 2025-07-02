@@ -7,7 +7,11 @@ convenient access to the data in various formats.
 
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional
 
-import pandas as pd
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    PANDAS_AVAILABLE = False
 
 from .models import Concept, ConceptSearchResponse
 
@@ -69,14 +73,14 @@ class SearchResult:
         Returns:
             DataFrame containing the concept data
         """
-        try:
-            data = self.to_list()
-            return pd.DataFrame(data)
-        except ImportError:
+        if not PANDAS_AVAILABLE:
             raise ImportError(
                 "pandas is required for DataFrame output. "
                 "Install with: pip install 'athena-client[pandas]'"
-            ) from None
+            )
+        
+        data = self.to_list()
+        return pd.DataFrame(data)
 
     def next_page(self) -> Optional["SearchResult"]:
         """Get the next page of results.
