@@ -1373,4 +1373,4 @@ results = asyncio.run(batch_process_concepts(queries))
 
 ---
 
-For more details, see the [README](./README.md) or the official documentation. This guide is designed to be your one-stop resource for robust, production-ready concept exploration and Athena API integration.
+For more details, see the [README](https://github.com/aandresalvarez/athena_client/blob/main/README.md) or the official documentation. This guide is designed to be your one-stop resource for robust, production-ready concept exploration and Athena API integration.

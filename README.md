@@ -1,13 +1,13 @@
 # athena-client
 
-[![SBOM](https://img.shields.io/badge/SBOM-available-blue)](sbom.json)
+[![SBOM](https://img.shields.io/badge/SBOM-available-blue)](https://github.com/aandresalvarez/athena_client/blob/main/sbom.json)
 
 An unofficial Python SDK for interacting with the OHDSI Athena Concepts API. Easily search, explore, and analyze medical concepts without any additional setup.  
 Developed by Alvaro A. Alvarez P. (alvaro1@stanford.edu).  
 This project is provided as-is, without warranty of any kind.
 
 > **Looking for advanced concept exploration, mapping, and best practices?**
-> See the [Concept Exploration Guide](CONCEPT_EXPLORATION_GUIDE.md) for a comprehensive tutorial on robust usage, advanced workflows, and real-world examples.
+> See the [Concept Exploration Guide](https://github.com/aandresalvarez/athena_client/blob/main/CONCEPT_EXPLORATION_GUIDE.md) for a comprehensive tutorial on robust usage, advanced workflows, and real-world examples.
 
 > **Responsible Usage Notice:**
 > Please use this package responsibly. Avoid making excessive or automated requests to the Athena API, as this may result in your IP being rate-limited or blocked by the API provider. Always use filters and limits where possible, and respect the terms of service of the OHDSI Athena API.
@@ -206,7 +206,7 @@ async def explore_concepts():
 asyncio.run(explore_concepts())
 ```
 
-> **📚 For detailed concept exploration examples and best practices, see the [Concept Exploration Guide](CONCEPT_EXPLORATION_GUIDE.md).**
+> **📚 For detailed concept exploration examples and best practices, see the [Concept Exploration Guide](https://github.com/aandresalvarez/athena_client/blob/main/CONCEPT_EXPLORATION_GUIDE.md).**
 
 ---
 
@@ -482,7 +482,7 @@ results = athena.search("aspirin", auto_retry=False)
 - **ValidationError**: Data validation
 - **APIError**: API-specific errors
 
-> **📚 For detailed error handling examples and troubleshooting, see the [Concept Exploration Guide](CONCEPT_EXPLORATION_GUIDE.md).**
+> **📚 For detailed error handling examples and troubleshooting, see the [Concept Exploration Guide](https://github.com/aandresalvarez/athena_client/blob/main/CONCEPT_EXPLORATION_GUIDE.md).**
 
 ---
 
@@ -544,9 +544,9 @@ python examples/example_name.py
 
 ## What's Next?
 
-- **📚 [Concept Exploration Guide](CONCEPT_EXPLORATION_GUIDE.md)** - Advanced usage, best practices, and real-world examples
-- **🔧 [Contributing Guide](CONTRIBUTING.md)** - How to contribute to the project
-- **🗺️ [Roadmap](ROADMAP.md)** - Planned features and enhancements
-- **📦 [Lightweight Installation Guide](LIGHTWEIGHT_INSTALLATION.md)** - Detailed dependency management
+- **📚 [Concept Exploration Guide](https://github.com/aandresalvarez/athena_client/blob/main/CONCEPT_EXPLORATION_GUIDE.md)** - Advanced usage, best practices, and real-world examples
+- **🔧 [Contributing Guide](https://github.com/aandresalvarez/athena_client/blob/main/CONTRIBUTING.md)** - How to contribute to the project
+- **🗺️ [Roadmap](https://github.com/aandresalvarez/athena_client/blob/main/ROADMAP.md)** - Planned features and enhancements
+- **📦 [Lightweight Installation Guide](https://github.com/aandresalvarez/athena_client/blob/main/LIGHTWEIGHT_INSTALLATION.md)** - Detailed dependency management
 
 
