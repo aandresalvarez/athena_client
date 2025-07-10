@@ -111,6 +111,10 @@ class HttpClient:
         """
         session = requests.Session()
 
+        # Allow a limited number of redirects to handle necessary API redirects
+        # while preventing infinite redirect loops
+        session.max_redirects = 2
+
         # Enhanced retry strategy for better handling of rate limiting
         # and server overload
         retry_strategy = Retry(
@@ -132,18 +136,27 @@ class HttpClient:
 
         return session
 
-    def _setup_default_headers(self) -> None:
-        """Set up default headers for all requests."""
-        # Set default headers similar to the working client
+    # List of browser-like User-Agents for fallback
+    _USER_AGENTS = [
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+    ]
+
+    def _setup_default_headers(self, user_agent_idx: int = 0) -> None:
+        """Set up default headers for all requests, with optional User-Agent index."""
         default_headers = {
-            "Accept": "application/json",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
             "Content-Type": "application/json",
-            "User-Agent": "AthenaOHDSIAPIClient/1.0",
+            "User-Agent": self._USER_AGENTS[user_agent_idx],
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://athena.ohdsi.org/",
+            "Connection": "keep-alive",
         }
-
-        # Update session headers
+        self.session.headers.clear()
         self.session.headers.update(default_headers)
-
         logger.debug("Default headers set: %s", default_headers)
 
     def _throttle_request(self) -> None:
@@ -374,99 +387,71 @@ class HttpClient:
     ) -> Union[Dict[str, Any], requests.Response]:
         """
         Make an HTTP request to the Athena API with enhanced retry and throttling.
-
-        Args:
-            method: HTTP method (GET, POST, etc.)
-            path: API endpoint path
-            params: Query parameters
-            data: Request body data
-            raw_response: Whether to return the raw response object
-
-        Returns:
-            Parsed JSON response or raw Response object
-
-        Raises:
-            ClientError: For 4xx status codes
-            ServerError: For 5xx status codes
-            NetworkError: For connection errors
-            RateLimitError: For rate limiting issues
+        Tries multiple User-Agents and browser-like headers if the server returns a redirect loop or non-JSON response.
         """
         url = self._build_url(path)
         body_bytes = b""
-
-        # Convert data to JSON bytes if provided
         if data is not None:
             body_bytes = json.dumps(data).encode("utf-8")
-
-        # Build authentication headers
         auth_headers = build_headers(method, url, body_bytes)
-
-        # Merge with session headers
         headers = dict(self.session.headers)
         headers.update(auth_headers)
-
-        # Normalize parameters to strings
         normalized_params = self._normalize_params(params)
-
-        # Generate a correlation ID for logging
         correlation_id = f"req-{id(self)}-{id(path)}"
-        logger.debug(
-            f"[{correlation_id}] {method} {url} with params: {normalized_params}"
-        )
-
-        # Throttle request to be respectful to the server
+        logger.debug(f"[{correlation_id}] {method} {url} with params: {normalized_params}")
         self._throttle_request()
 
-        try:
-            response = self.session.request(
-                method=method,
-                url=url,
-                params=normalized_params,
-                data=body_bytes if data is not None else None,
-                headers=headers,
-                timeout=self.timeout,
-            )
-
-            logger.debug(f"[{correlation_id}] {response.status_code} {response.reason}")
-
-            # Handle rate limiting specifically
-            if response.status_code == 429:
-                logger.warning(
-                    f"Rate limited by server. Status: {response.status_code}"
+        last_exception = None
+        for agent_idx, agent in enumerate(self._USER_AGENTS):
+            if agent_idx > 0:
+                logger.info(f"Retrying with fallback User-Agent: {agent}")
+                self._setup_default_headers(user_agent_idx=agent_idx)
+                headers = dict(self.session.headers)
+                headers.update(auth_headers)
+            try:
+                response = self.session.request(
+                    method=method,
+                    url=url,
+                    params=normalized_params,
+                    data=body_bytes if data is not None else None,
+                    headers=headers,
+                    timeout=self.timeout,
                 )
-                self._handle_rate_limit(response)
-                # After waiting, we could retry the request, but for now we'll
-                # raise the error
-                # The retry mechanism in the client will handle this
-
-            if raw_response:
-                return response
-
-            return self._handle_response(response, url)
-
-        except requests.exceptions.Timeout as e:
-            msg = (
-                f"Timeout when accessing {url}. "
-                f"Verify network connectivity and the API's responsiveness."
-            )
-            logger.error(msg)
-            logger.exception(e)
-            raise TimeoutError(msg, url=url, timeout=self.timeout) from e
-
-        except requests.exceptions.ConnectionError as e:
-            msg = (
-                f"Connection error when accessing {url}. "
-                f"Check your network connection and endpoint URL."
-            )
-            logger.error(msg)
-            logger.exception(e)
-            raise NetworkError(msg, url=url) from e
-
-        except Exception as e:
-            msg = f"An unexpected error occurred when accessing {url}: {e}"
-            logger.error(msg)
-            logger.exception(e)
-            raise NetworkError(msg, url=url) from e
+                logger.debug(f"[{correlation_id}] {response.status_code} {response.reason}")
+                if raw_response:
+                    return response
+                # Check for redirect loop or HTML response
+                content_type = response.headers.get("Content-Type", "")
+                if response.status_code in (301, 302, 303, 307, 308):
+                    logger.warning(f"Received redirect ({response.status_code}) to {response.headers.get('Location')}")
+                    last_exception = NetworkError(f"Redirected to {response.headers.get('Location')}", url=url)
+                    continue
+                if not content_type.startswith("application/json"):
+                    logger.warning(f"Non-JSON response received: {content_type}")
+                    logger.debug(f"Response text: {response.text[:500]}")
+                    last_exception = NetworkError(f"Non-JSON response received: {content_type}", url=url)
+                    continue
+                # Try to parse JSON and handle as usual
+                return self._handle_response(response, url)
+            except requests.exceptions.TooManyRedirects as e:
+                msg = (
+                    f"Redirect loop detected when accessing {url}. "
+                    f"This may indicate a server configuration issue. "
+                    f"Please check if the API endpoint is correct or try again later."
+                )
+                logger.error(msg)
+                logger.exception(e)
+                last_exception = NetworkError(msg, url=url)
+                continue
+            except Exception as e:
+                logger.error(f"[{correlation_id}] Exception: {e}")
+                logger.exception(e)
+                last_exception = e
+                continue
+        # If all attempts fail, raise the last exception
+        if last_exception:
+            raise last_exception
+        raise NetworkError(f"Failed to get a valid response from {url} after trying multiple User-Agents.", url=url)
 
     def get(
         self,
