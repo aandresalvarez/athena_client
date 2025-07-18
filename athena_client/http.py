@@ -23,7 +23,6 @@ from .exceptions import (
     NetworkError,
     RateLimitError,
     ServerError,
-    TimeoutError,
     ValidationError,
 )
 from .settings import get_settings
@@ -138,11 +137,26 @@ class HttpClient:
 
     # List of browser-like User-Agents for fallback
     _USER_AGENTS = [
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+        (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        (
+            "Mozilla/5.0 (X11; Linux x86_64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        ),
+        (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) "
+            "Gecko/20100101 Firefox/120.0"
+        ),
     ]
 
     def _setup_default_headers(self, user_agent_idx: int = 0) -> None:
@@ -387,7 +401,8 @@ class HttpClient:
     ) -> Union[Dict[str, Any], requests.Response]:
         """
         Make an HTTP request to the Athena API with enhanced retry and throttling.
-        Tries multiple User-Agents and browser-like headers if the server returns a redirect loop or non-JSON response.
+        Tries multiple User-Agents and browser-like headers if the server returns
+        a redirect loop or non-JSON response.
         """
         url = self._build_url(path)
         body_bytes = b""
@@ -398,10 +413,12 @@ class HttpClient:
         headers.update(auth_headers)
         normalized_params = self._normalize_params(params)
         correlation_id = f"req-{id(self)}-{id(path)}"
-        logger.debug(f"[{correlation_id}] {method} {url} with params: {normalized_params}")
+        logger.debug(
+            f"[{correlation_id}] {method} {url} with params: {normalized_params}"
+        )
         self._throttle_request()
 
-        last_exception = None
+        last_exception: Optional[Exception] = None
         for agent_idx, agent in enumerate(self._USER_AGENTS):
             if agent_idx > 0:
                 logger.info(f"Retrying with fallback User-Agent: {agent}")
@@ -417,19 +434,28 @@ class HttpClient:
                     headers=headers,
                     timeout=self.timeout,
                 )
-                logger.debug(f"[{correlation_id}] {response.status_code} {response.reason}")
+                logger.debug(
+                    f"[{correlation_id}] {response.status_code} {response.reason}"
+                )
                 if raw_response:
                     return response
                 # Check for redirect loop or HTML response
                 content_type = response.headers.get("Content-Type", "")
                 if response.status_code in (301, 302, 303, 307, 308):
-                    logger.warning(f"Received redirect ({response.status_code}) to {response.headers.get('Location')}")
-                    last_exception = NetworkError(f"Redirected to {response.headers.get('Location')}", url=url)
+                    logger.warning(
+                        f"Received redirect ({response.status_code}) to "
+                        f"{response.headers.get('Location')}"
+                    )
+                    last_exception = NetworkError(
+                        f"Redirected to {response.headers.get('Location')}", url=url
+                    )
                     continue
                 if not content_type.startswith("application/json"):
                     logger.warning(f"Non-JSON response received: {content_type}")
                     logger.debug(f"Response text: {response.text[:500]}")
-                    last_exception = NetworkError(f"Non-JSON response received: {content_type}", url=url)
+                    last_exception = NetworkError(
+                        f"Non-JSON response received: {content_type}", url=url
+                    )
                     continue
                 # Try to parse JSON and handle as usual
                 return self._handle_response(response, url)
@@ -451,7 +477,11 @@ class HttpClient:
         # If all attempts fail, raise the last exception
         if last_exception:
             raise last_exception
-        raise NetworkError(f"Failed to get a valid response from {url} after trying multiple User-Agents.", url=url)
+        raise NetworkError(
+            f"Failed to get a valid response from {url} after trying multiple "
+            f"User-Agents.",
+            url=url,
+        )
 
     def get(
         self,

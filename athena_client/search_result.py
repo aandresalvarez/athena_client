@@ -12,6 +12,7 @@ try:
 
     PANDAS_AVAILABLE = True
 except ImportError:
+    pd = None  # type: ignore  # This line is needed for patching in tests
     PANDAS_AVAILABLE = False
 
 from .models import Concept, ConceptSearchResponse

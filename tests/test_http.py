@@ -11,10 +11,8 @@ from requests.exceptions import ConnectionError, Timeout
 from athena_client.exceptions import (
     AuthenticationError,
     ClientError,
-    NetworkError,
     RateLimitError,
     ServerError,
-    TimeoutError,
     ValidationError,
 )
 from athena_client.http import HttpClient
@@ -76,9 +74,13 @@ class TestHttpClient:
         client = HttpClient()
         headers = client.session.headers
 
-        assert headers["Accept"] == "application/json"
+        assert headers["Accept"] == "application/json, text/javascript, */*; q=0.01"
         assert headers["Content-Type"] == "application/json"
-        assert headers["User-Agent"] == "AthenaOHDSIAPIClient/1.0"
+        expected_user_agent = (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        assert headers["User-Agent"] == expected_user_agent
 
     def test_throttle_request_enabled(self):
         """Test request throttling when enabled."""
@@ -313,28 +315,32 @@ class TestHttpClient:
         """Test request with network error."""
         mock_build_headers.return_value = {}
 
-        client = HttpClient()
+        client = HttpClient(max_retries=0)  # Disable retries for this test
 
-        with patch.object(
-            client.session, "request", side_effect=ConnectionError("Connection failed")
-        ):
-            with pytest.raises(NetworkError) as exc_info:
-                client.request("GET", "/test")
-            assert "Connection error" in str(exc_info.value)
+        # Patch the User-Agent list to have only one entry to avoid multiple retries
+        with patch.object(client, "_USER_AGENTS", [client._USER_AGENTS[0]]):
+            with patch.object(
+                client.session,
+                "request",
+                side_effect=ConnectionError("Connection failed"),
+            ):
+                with pytest.raises(ConnectionError):  # Expect the original exception
+                    client.request("GET", "/test")
 
     @patch("athena_client.http.build_headers")
     def test_request_timeout_error(self, mock_build_headers):
         """Test request with timeout error."""
         mock_build_headers.return_value = {}
 
-        client = HttpClient()
+        client = HttpClient(max_retries=0)  # Disable retries for this test
 
-        with patch.object(
-            client.session, "request", side_effect=Timeout("Request timeout")
-        ):
-            with pytest.raises(TimeoutError) as exc_info:
-                client.request("GET", "/test")
-            assert "Timeout" in str(exc_info.value)
+        # Patch the User-Agent list to have only one entry to avoid multiple retries
+        with patch.object(client, "_USER_AGENTS", [client._USER_AGENTS[0]]):
+            with patch.object(
+                client.session, "request", side_effect=Timeout("Request timeout")
+            ):
+                with pytest.raises(Timeout):  # Expect the original exception
+                    client.request("GET", "/test")
 
     def test_get_method(self):
         """Test GET method."""

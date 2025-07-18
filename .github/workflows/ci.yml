@@ -33,6 +33,8 @@ jobs:
         run: pip install hatch
       - name: Install dev deps
         run: hatch env create
+      - name: Install optional dependencies for testing
+        run: hatch run pip install -e ".[pandas,db]"
       - name: List installed packages
         run: hatch run pip list
       - name: Test suite

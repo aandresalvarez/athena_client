@@ -1,18 +1,21 @@
+from typing import TYPE_CHECKING, Dict, List
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Engine
+
 try:
     # Only import these if needed, do not import sqlalchemy at the top level
     from sqlalchemy import bindparam, create_engine, text
-    from sqlalchemy.engine import Engine
 
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     SQLALCHEMY_AVAILABLE = False
-from typing import Dict, List
 
 
 class SQLAlchemyConnector:
     """Database connector using SQLAlchemy Core."""
 
-    def __init__(self, engine: Engine) -> None:
+    def __init__(self, engine: "Engine") -> None:
         if not SQLALCHEMY_AVAILABLE:
             raise ImportError(
                 "sqlalchemy is required for database features. Install with: "
