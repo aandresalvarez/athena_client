@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "athena-client"
-version = "1.0.26"
+version = "1.0.27"
 description = "An unofficial Python SDK for interacting with the OHDSI Athena Concepts API."
 readme = "README.md"
 requires-python = ">=3.9,<3.14"
