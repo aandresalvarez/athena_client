@@ -178,9 +178,16 @@ athena search "aspirin" --output csv | tail -n +2 > aspirin.csv
 
 For advanced concept discovery and mapping:
 
+> Important: The client (sync and async) now sends browser-like headers by default and works anonymously against the public OHDSI Athena. No token is required for the public server. If your organization runs a private Athena that enforces authentication and you encounter 401/403, provide credentials (e.g., set `ATHENA_TOKEN` or pass `token` to the client).
+>
+> Note: ConceptExplorer is async-only and requires `AthenaAsyncClient`. The regular `Athena` (sync) client supports core APIs (search, details, relationships, graph, summary) but not ConceptExplorer.
+
 ```python
 import asyncio
+from athena_client.async_client import AthenaAsyncClient
 from athena_client.concept_explorer import create_concept_explorer
+
+athena = AthenaAsyncClient()
 
 async def explore_concepts():
     explorer = create_concept_explorer(athena)

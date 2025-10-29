@@ -21,13 +21,13 @@ import logging
 import time
 from typing import Dict, Any
 
-# Import the athena client
+# Import the Athena async client and concept explorer
 try:
-    from athena_client import AthenaClient, create_concept_explorer
     from athena_client.async_client import AthenaAsyncClient
+    from athena_client.concept_explorer import create_concept_explorer
 except ImportError:
     print("Please install athena-client: pip install athena-client")
-    exit(1)
+    raise
 
 # Configure logging
 logging.basicConfig(

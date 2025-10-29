@@ -98,18 +98,43 @@ class AsyncHttpClient:
         # Set up default headers
         self._setup_default_headers()
 
-    def _setup_default_headers(self) -> None:
-        """Set up default headers for all requests."""
-        # Set default headers similar to the working client
+    # List of browser-like User-Agents for fallback, aligned with sync client
+    _USER_AGENTS = [
+        (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        (
+            "Mozilla/5.0 (X11; Linux x86_64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        ),
+        (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) "
+            "Gecko/20100101 Firefox/120.0"
+        ),
+    ]
+
+    def _setup_default_headers(self, user_agent_idx: int = 0) -> None:
+        """Set up default headers for all requests, with optional User-Agent index."""
         default_headers = {
-            "Accept": "application/json",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
             "Content-Type": "application/json",
-            "User-Agent": "AthenaOHDSIAPIClient/1.0",
+            "User-Agent": self._USER_AGENTS[user_agent_idx],
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://athena.ohdsi.org/",
+            "Connection": "keep-alive",
         }
-
-        # Update client headers
+        # Reset and apply new defaults
+        self.client.headers.clear()
         self.client.headers.update(default_headers)
-
         logger.debug("Default headers set: %s", default_headers)
 
     def _build_url(self, path: str) -> str:
@@ -220,38 +245,100 @@ class AsyncHttpClient:
             body_bytes = json.dumps(data).encode("utf-8")
 
         # Build authentication headers
-        headers = build_headers(method, url, body_bytes)
+        auth_headers = build_headers(method, url, body_bytes)
 
-        # Add Content-Type header if sending data
+        # Start from client defaults then overlay auth headers
+        # (and Content-Type if needed)
+        headers = dict(self.client.headers)
+        headers.update(auth_headers)
         if data is not None:
             headers["Content-Type"] = "application/json"
+
+        # Ensure critical browser-like headers are present even if httpx
+        # header normalization changes casing/keys
+        headers.setdefault("Referer", "https://athena.ohdsi.org/")
+        headers.setdefault("Accept-Language", "en-US,en;q=0.9")
+        headers.setdefault("User-Agent", self._USER_AGENTS[0])
 
         # Generate a correlation ID for logging
         correlation_id = f"req-{id(self)}-{id(path)}"
         logger.debug(f"[{correlation_id}] {method} {url}")
 
-        try:
-            response = await self.client.request(
-                method=method,
-                url=url,
-                params=params,
-                content=body_bytes if data is not None else None,
-                headers=headers,
-                timeout=self.timeout,
-            )
+        last_exception: Optional[Exception] = None
+        # Try with multiple browser-like User-Agents if needed
+        for agent_idx, agent in enumerate(self._USER_AGENTS):
+            if agent_idx > 0:
+                logger.info(f"Retrying with fallback User-Agent: {agent}")
+                self._setup_default_headers(user_agent_idx=agent_idx)
+                headers = dict(self.client.headers)
+                headers.update(auth_headers)
+                if data is not None:
+                    headers["Content-Type"] = "application/json"
+                headers.setdefault("Referer", "https://athena.ohdsi.org/")
+                headers.setdefault("Accept-Language", "en-US,en;q=0.9")
+                headers.setdefault("User-Agent", self._USER_AGENTS[agent_idx])
+            try:
+                response = await self.client.request(
+                    method=method,
+                    url=url,
+                    params=params,
+                    content=body_bytes if data is not None else None,
+                    headers=headers,
+                    timeout=self.timeout,
+                )
 
-            logger.debug(
-                f"[{correlation_id}] {response.status_code} {response.reason_phrase}"
-            )
+                logger.debug(
+                    (
+                        f"[{correlation_id}] {response.status_code} "
+                        f"{response.reason_phrase}"
+                    )
+                )
 
-            if raw_response:
-                return response
+                if raw_response:
+                    return response
 
-            return await self._handle_response(response)
+                # Validate content type is JSON
+                content_type = response.headers.get("Content-Type", "")
+                if not content_type.startswith("application/json"):
+                    logger.warning(
+                        (
+                            "Non-JSON response received: "
+                            f"{content_type}; trying next User-Agent"
+                        )
+                    )
+                    last_exception = NetworkError(
+                        f"Non-JSON response received: {content_type}",
+                    )
+                    continue
 
-        except (httpx.TimeoutException, httpx.ConnectError) as e:
-            logger.warning(f"[{correlation_id}] Network error: {e}")
-            raise NetworkError(f"Network error: {e}") from e
+                # If 403, try next User-Agent before raising
+                if response.status_code == 403:
+                    logger.warning(
+                        "Access forbidden (403). Retrying with different User-Agent."
+                    )
+                    last_exception = ClientError(
+                        "Access forbidden: 403 from server",
+                        status_code=response.status_code,
+                        response=response.text,
+                    )
+                    continue
+
+                return await self._handle_response(response)
+
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                logger.warning(f"[{correlation_id}] Network error: {e}")
+                last_exception = NetworkError(f"Network error: {e}")
+                continue
+
+        # Exhausted User-Agents
+        if last_exception:
+            raise last_exception
+        raise NetworkError(
+            (
+                "Failed to get a valid response from "
+                f"{url} after trying multiple User-Agents."
+            ),
+        )
 
     async def get(
         self,

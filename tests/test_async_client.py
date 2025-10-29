@@ -52,6 +52,15 @@ class TestAsyncHttpClient:
         assert client.backoff_factor == 0.5
 
     @pytest.mark.asyncio
+    async def test_default_headers_include_browser_like_fields(self):
+        """Async client should include Referer and Accept-Language headers."""
+        client = AsyncHttpClient()
+        assert "Referer" in client.client.headers
+        assert client.client.headers["Referer"].startswith("https://athena.ohdsi.org/")
+        assert "Accept-Language" in client.client.headers
+        assert "User-Agent" in client.client.headers
+
+    @pytest.mark.asyncio
     async def test_build_url(self):
         """Test URL building."""
         client = AsyncHttpClient(base_url="https://api.example.com")
@@ -128,6 +137,29 @@ class TestAsyncHttpClient:
         ):
             result = await client.request("GET", "/test")
             assert result == {"result": "success"}
+
+    @patch("athena_client.async_client.build_headers")
+    @pytest.mark.asyncio
+    async def test_request_merges_auth_and_default_headers(self, mock_build_headers):
+        """Request should merge auth headers with default browser-like headers."""
+        mock_build_headers.return_value = {"X-Athena-Auth": "Bearer token-123"}
+
+        client = AsyncHttpClient()
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.json.return_value = {"ok": True}
+
+        with patch.object(
+            client.client, "request", new_callable=AsyncMock, return_value=mock_response
+        ) as mock_request:
+            await client.request("GET", "/concepts", params={"query": "x"})
+            called_headers = mock_request.call_args[1]["headers"]
+            # Auth header present
+            assert called_headers["X-Athena-Auth"] == "Bearer token-123"
+            # Default headers present
+            assert called_headers["Referer"].startswith("https://athena.ohdsi.org/")
+            assert "User-Agent" in called_headers
 
     @patch("athena_client.async_client.build_headers")
     @pytest.mark.asyncio
