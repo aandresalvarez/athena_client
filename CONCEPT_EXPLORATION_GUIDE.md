@@ -639,6 +639,16 @@ results = athena.search("aspirin")
 
 The ConceptExplorer provides powerful async features for discovering standard concepts and building concept mappings.
 
+> Note: ConceptExplorer is async-only and requires `AthenaAsyncClient`. The public OHDSI Athena works anonymously; no token is required. If a private instance enforces auth and you see 401/403, provide credentials (e.g., `ATHENA_TOKEN`).
+
+Setup for the examples in this section:
+
+```python
+from athena_client.async_client import AthenaAsyncClient
+
+athena = AthenaAsyncClient()
+```
+
 ### Basic Concept Exploration
 
 ```python

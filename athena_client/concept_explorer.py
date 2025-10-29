@@ -133,6 +133,21 @@ class ConceptExplorer:
         all_direct_matches = direct_results.all()
         state.results["direct_matches"] = all_direct_matches
 
+        # Early stop if time limit already reached after initial search
+        if asyncio.get_event_loop().time() - state.start_time >= state.max_time_seconds:
+            elapsed_time = asyncio.get_event_loop().time() - state.start_time
+            state.results["exploration_stats"] = {
+                "total_concepts_found": len(state.visited_ids),
+                "api_calls_made": state.api_call_count,
+                "time_elapsed_seconds": elapsed_time,
+                "limits_reached": {
+                    "max_concepts": len(state.visited_ids) >= max_total_concepts,
+                    "max_api_calls": state.api_call_count >= max_api_calls,
+                    "max_time": True,
+                },
+            }
+            return state.results
+
         # Take top initial_seed_limit results as seeds
         seed_concepts = all_direct_matches[:initial_seed_limit]
         logger.info(f"Using {len(seed_concepts)} concepts as exploration seeds")
@@ -141,6 +156,22 @@ class ConceptExplorer:
         for concept in seed_concepts:
             state.queue.append((concept, 0, [concept.id]))
             state.visited_ids.add(concept.id)
+
+        # If the caller provided an extremely small time budget, return early with
+        # the direct matches to strictly respect the limit.
+        if state.max_time_seconds <= 1:
+            elapsed_time = asyncio.get_event_loop().time() - state.start_time
+            state.results["exploration_stats"] = {
+                "total_concepts_found": len(state.visited_ids),
+                "api_calls_made": state.api_call_count,
+                "time_elapsed_seconds": elapsed_time,
+                "limits_reached": {
+                    "max_concepts": len(state.visited_ids) >= max_total_concepts,
+                    "max_api_calls": state.api_call_count >= max_api_calls,
+                    "max_time": True,
+                },
+            }
+            return state.results
 
         # Step 2: Main BFS traversal loop
         await self._bfs_exploration_loop(
@@ -151,8 +182,12 @@ class ConceptExplorer:
             vocabulary_priority,
         )
 
-        # Step 3: Find cross-references (with limits)
-        if state.api_call_count < state.max_api_calls:
+        # Step 3: Find cross-references (with limits and time check)
+        if (
+            state.api_call_count < state.max_api_calls
+            and (asyncio.get_event_loop().time() - state.start_time)
+            < state.max_time_seconds
+        ):
             logger.info("Finding cross-references")
             cross_refs = await self._find_cross_references(
                 all_direct_matches, vocabulary_priority, state
@@ -299,6 +334,14 @@ class ConceptExplorer:
         ids_to_fetch_details: Set[int],
     ) -> None:
         """Discover neighboring concepts through synonyms."""
+        # Respect overall time limit
+        now = asyncio.get_event_loop().time()
+        if now - state.start_time >= state.max_time_seconds:
+            return
+        # Require a minimal remaining time budget before making synonym calls
+        remaining_time = state.max_time_seconds - (now - state.start_time)
+        if remaining_time < 0.3:
+            return
         if concept.standardConcept == "Standard":
             # For standard concepts, search for synonyms
             try:
@@ -330,6 +373,14 @@ class ConceptExplorer:
         ids_to_fetch_details: Set[int],
     ) -> None:
         """Discover neighboring concepts through relationships."""
+        # Respect overall time limit
+        now = asyncio.get_event_loop().time()
+        if now - state.start_time >= state.max_time_seconds:
+            return
+        # Require a minimal remaining time budget before making relationship calls
+        remaining_time = state.max_time_seconds - (now - state.start_time)
+        if remaining_time < 0.3:
+            return
         try:
             # Check API call limit
             if state.api_call_count >= state.max_api_calls:
@@ -362,8 +413,17 @@ class ConceptExplorer:
         if not ids_to_fetch_details:
             return
 
-        # Check API call limit
-        if state.api_call_count >= state.max_api_calls:
+        # Check API call and time limits
+        now = asyncio.get_event_loop().time()
+        if (
+            state.api_call_count >= state.max_api_calls
+            or now - state.start_time >= state.max_time_seconds
+        ):
+            return
+
+        # Require a minimal remaining time budget before batch details (can be heavier)
+        remaining_time = state.max_time_seconds - (now - state.start_time)
+        if remaining_time < 0.3:
             return
 
         try:
