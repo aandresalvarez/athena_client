@@ -30,7 +30,7 @@ def get_sqlalchemy_connector() -> type:
         ) from err
 
 
-__version__ = "1.0.28"
+__version__ = "1.0.29"
 
 __all__ = [
     "Athena",
