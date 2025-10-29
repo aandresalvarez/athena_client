@@ -137,6 +137,19 @@ class AsyncHttpClient:
         self.client.headers.update(default_headers)
         logger.debug("Default headers set: %s", default_headers)
 
+    def _compose_request_headers(
+        self, auth_headers: Dict[str, str], user_agent_idx: int, has_data: bool
+    ) -> Dict[str, str]:
+        """Compose final request headers from defaults and auth without duplication."""
+        headers = dict(self.client.headers)
+        headers.update(auth_headers)
+        if has_data:
+            headers["Content-Type"] = "application/json"
+        headers.setdefault("Referer", "https://athena.ohdsi.org/")
+        headers.setdefault("Accept-Language", "en-US,en;q=0.9")
+        headers.setdefault("User-Agent", self._USER_AGENTS[user_agent_idx])
+        return headers
+
     def _build_url(self, path: str) -> str:
         """
         Build full URL by joining base URL and path.
@@ -246,19 +259,7 @@ class AsyncHttpClient:
 
         # Build authentication headers
         auth_headers = build_headers(method, url, body_bytes)
-
-        # Start from client defaults then overlay auth headers
-        # (and Content-Type if needed)
-        headers = dict(self.client.headers)
-        headers.update(auth_headers)
-        if data is not None:
-            headers["Content-Type"] = "application/json"
-
-        # Ensure critical browser-like headers are present even if httpx
-        # header normalization changes casing/keys
-        headers.setdefault("Referer", "https://athena.ohdsi.org/")
-        headers.setdefault("Accept-Language", "en-US,en;q=0.9")
-        headers.setdefault("User-Agent", self._USER_AGENTS[0])
+        headers = self._compose_request_headers(auth_headers, 0, data is not None)
 
         # Generate a correlation ID for logging
         correlation_id = f"req-{id(self)}-{id(path)}"
@@ -327,8 +328,9 @@ class AsyncHttpClient:
 
             except (httpx.TimeoutException, httpx.ConnectError) as e:
                 logger.warning(f"[{correlation_id}] Network error: {e}")
-                last_exception = NetworkError(f"Network error: {e}")
-                continue
+                # Do not retry with different User-Agent for network issues;
+                # raise immediately
+                raise NetworkError(f"Network error: {e}") from e
 
         # Exhausted User-Agents
         if last_exception:
