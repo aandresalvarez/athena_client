@@ -24,11 +24,16 @@ jobs:
     name: Tests & SBOM
     needs: security
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+      fail-fast: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
       - name: Install Hatch
         run: pip install hatch
       - name: Install dev deps
@@ -40,10 +45,10 @@ jobs:
       - name: Test suite
         run: hatch run cov
       - name: Generate SBOM
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && matrix.python-version == '3.9'
         run: make cyclonedx
       - name: Upload SBOM
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && matrix.python-version == '3.9'
         uses: actions/upload-artifact@v4
         with:
           name: sbom

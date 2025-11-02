@@ -8,6 +8,7 @@ including progress tracking, query size estimation, and timeout management.
 import logging
 from typing import Optional
 
+from .optional_deps import check_optional_package, require_optional_package
 from .progress import (
     ProgressTracker,
     estimate_query_size,
@@ -51,4 +52,6 @@ __all__ = [
     "estimate_query_size",
     "get_operation_timeout",
     "format_large_query_warning",
+    "require_optional_package",
+    "check_optional_package",
 ]

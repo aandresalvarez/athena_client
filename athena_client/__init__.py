@@ -24,10 +24,9 @@ def get_sqlalchemy_connector() -> type:
 
         return SQLAlchemyConnector
     except ImportError as err:
-        raise ImportError(
-            "sqlalchemy is required for SQLAlchemyConnector. "
-            "Install with: pip install 'athena-client[db]'"
-        ) from err
+        from .utils.optional_deps import require_optional_package
+
+        require_optional_package("sqlalchemy", "database operations", "db", err)
 
 
 __version__ = "1.0.30"
