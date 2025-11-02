@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "hatchling", "hatch"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "athena-client"
-version = "1.0.29"
+version = "1.0.30"
 description = "An unofficial Python SDK for interacting with the OHDSI Athena Concepts API."
 readme = "README.md"
 requires-python = ">=3.9,<3.14"
@@ -25,8 +25,8 @@ dependencies = [
     "rich>=10.0.0"
 ]
 
-[tool.setuptools]
-packages = { find = { include = ["athena_client*"], exclude = ["output*"] } }
+[tool.hatch.build.targets.wheel]
+packages = ["athena_client"]
 
 [project.optional-dependencies]
 # Core functionality - minimal dependencies (same as main dependencies)
