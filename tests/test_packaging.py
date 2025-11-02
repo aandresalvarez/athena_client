@@ -176,18 +176,26 @@ def test_python_version_constraint(pyproject_data):
 
 
 def test_version_format(pyproject_data):
-    """Test that version is in correct format."""
-    version = pyproject_data.get("project", {}).get("version", "")
+    """Test that version is in correct format using packaging library."""
+    from packaging.version import InvalidVersion, Version
 
-    assert version, "version should be specified"
+    version_str = pyproject_data.get("project", {}).get("version", "")
 
-    # Should be semantic versioning format
-    parts = version.split(".")
-    assert len(parts) == 3, f"Version should be in format X.Y.Z, got: {version}"
+    assert version_str, "version should be specified"
 
-    # All parts should be numeric
-    for part in parts:
-        assert part.isdigit(), f"Version parts should be numeric, got: {version}"
+    # Use packaging library for proper semantic version validation
+    # This handles pre-releases (1.0.30-alpha, 1.0.30rc1) and
+    # build metadata (1.0.30+build.1)
+    try:
+        version = Version(version_str)
+        assert version is not None, f"Failed to parse version: {version_str}"
+
+        # Ensure it's a valid semantic version with at least major.minor.patch
+        assert version.major >= 0, "Major version should be non-negative"
+        assert version.minor >= 0, "Minor version should be non-negative"
+        assert version.micro >= 0, "Micro/patch version should be non-negative"
+    except InvalidVersion as e:
+        pytest.fail(f"Invalid version format '{version_str}': {e}")
 
 
 def test_optional_dependencies_structure(pyproject_data):

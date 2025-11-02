@@ -34,7 +34,7 @@ def run_command(cmd: List[str], cwd: Optional[str] = None) -> Tuple[int, str, st
         cwd=cwd,
         capture_output=True,
         text=True,
-        timeout=120,  # 2 minute timeout
+        timeout=120,  # 2-minute timeout
     )
     return result.returncode, result.stdout, result.stderr
 
@@ -123,7 +123,7 @@ class TestInstallationMethods:
             env=env,
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=120,
         )
         assert result.returncode == 0, f"pipx install failed: {result.stderr}"
 
