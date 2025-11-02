@@ -56,7 +56,7 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
     """
 
     # Convert Pydantic models and SearchResult to dicts/lists for serialization
-    def to_serializable(obj: object) -> Any:
+    def to_serializable(obj: Any) -> Any:
         # If the object has a .to_list() method (e.g., SearchResult), use it
         if hasattr(obj, "to_list") and callable(obj.to_list):
             return to_serializable(obj.to_list())

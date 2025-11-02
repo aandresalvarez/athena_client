@@ -67,7 +67,7 @@ def test_pandas_compatibility():
 def test_pydantic_compatibility():
     """Test Pydantic v2 compatibility."""
     try:
-        from athena_client.models import Concept
+        from athena_client.models import Concept, ConceptType
 
         concept = Concept(
             id=12345,
@@ -75,9 +75,10 @@ def test_pydantic_compatibility():
             domain="Condition",
             vocabulary="SNOMED",
             className="Clinical Finding",
-            standardConcept="Standard",
+            standardConcept=ConceptType.STANDARD,
             code="12345",
             invalidReason=None,
+            score=None,
         )
         assert concept.id == 12345
         assert concept.name == "Test Concept"
@@ -112,31 +113,25 @@ def test_cryptography_compatibility():
 
 def test_dependency_versions():
     """Test that we're using compatible dependency versions."""
-    import pkg_resources
+    from importlib.metadata import PackageNotFoundError, version
+
+    from packaging.version import parse as parse_version
 
     try:
-        sqlalchemy_version = pkg_resources.get_distribution("sqlalchemy").version
-        assert pkg_resources.parse_version(
-            sqlalchemy_version
-        ) >= pkg_resources.parse_version("1.4.0")
-    except pkg_resources.DistributionNotFound:
+        sqlalchemy_version = version("sqlalchemy")
+        assert parse_version(sqlalchemy_version) >= parse_version("1.4.0")
+    except PackageNotFoundError:
         pytest.skip("SQLAlchemy not installed")
     try:
-        pandas_version = pkg_resources.get_distribution("pandas").version
-        assert pkg_resources.parse_version(
-            pandas_version
-        ) >= pkg_resources.parse_version("1.3.0")
-        assert pkg_resources.parse_version(
-            pandas_version
-        ) < pkg_resources.parse_version("3.0.0")
-    except pkg_resources.DistributionNotFound:
+        pandas_version = version("pandas")
+        assert parse_version(pandas_version) >= parse_version("1.3.0")
+        assert parse_version(pandas_version) < parse_version("3.0.0")
+    except PackageNotFoundError:
         pytest.skip("pandas not installed")
     try:
-        pydantic_version = pkg_resources.get_distribution("pydantic").version
-        assert pkg_resources.parse_version(
-            pydantic_version
-        ) >= pkg_resources.parse_version("2.0.0")
-    except pkg_resources.DistributionNotFound:
+        pydantic_version = version("pydantic")
+        assert parse_version(pydantic_version) >= parse_version("2.0.0")
+    except PackageNotFoundError:
         pytest.skip("pydantic not installed")
 
 
