@@ -9,17 +9,8 @@ import json
 import sys
 from typing import Any, List, Optional, cast
 
-# Check for required dependencies at import time
-try:
-    import click
-    import rich
-except ImportError as e:
-    print(
-        f"Missing required dependency: {e.name}. "
-        "Install with 'pip install \"athena-client[cli]\"'"
-    )
-    sys.exit(1)
-
+import click
+import rich
 from rich.console import Console
 from rich.table import Table
 

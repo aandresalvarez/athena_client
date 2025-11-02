@@ -7,8 +7,9 @@ name = "athena-client"
 version = "1.0.30"
 description = "An unofficial Python SDK for interacting with the OHDSI Athena Concepts API."
 readme = "README.md"
-requires-python = ">=3.9,<3.14"
-license = "MIT"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+license-files = ["LICENSE"]
 authors = [
     {name = "Alvaro A. Alvarez P. "}
 ]
@@ -112,9 +113,10 @@ athena = "athena_client.cli:main"
 athena-client = "athena_client.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/username/athena-client"
-Documentation = "https://athena-client.readthedocs.io"
-Issues = "https://github.com/username/athena-client/issues"
+Homepage = "https://github.com/aandresalvarez/athena_client"
+Documentation = "https://github.com/aandresalvarez/athena_client#readme"
+Issues = "https://github.com/aandresalvarez/athena_client/issues"
+Repository = "https://github.com/aandresalvarez/athena_client"
 
 [tool.black]
 line-length = 88

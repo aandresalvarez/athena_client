@@ -284,5 +284,62 @@ def test_py_typed_included_in_wheel(pyproject_data):
         )
 
 
+def test_license_file_exists():
+    """
+    Test that LICENSE file exists in the repository.
+
+    LICENSE file should be included in the distributed package
+    so users know the terms under which they can use the software.
+    """
+    license_path = Path(__file__).parent.parent / "LICENSE"
+
+    assert license_path.exists(), (
+        "LICENSE file is missing. Add a LICENSE file to the repository root "
+        "to properly license the package."
+    )
+
+
+def test_license_in_package_metadata(pyproject_data):
+    """
+    Test that license is properly declared in package metadata.
+
+    This ensures the license information is included in package distributions.
+    """
+    project = pyproject_data.get("project", {})
+
+    # Should have license field
+    assert "license" in project, "license field should be present in [project]"
+
+    # Should have license-files to include LICENSE in distribution
+    license_files = project.get("license-files")
+    if license_files:
+        assert "LICENSE" in license_files, "LICENSE should be in license-files list"
+
+
+def test_project_urls_correct(pyproject_data):
+    """
+    Test that project URLs are correctly set and not placeholder values.
+
+    Prevents publishing packages with placeholder URLs.
+    """
+    urls = pyproject_data.get("project", {}).get("urls", {})
+
+    assert urls, "project.urls should be defined"
+
+    # Check for common placeholder patterns
+    for key, url in urls.items():
+        assert "username" not in url.lower(), (
+            f"{key} URL contains placeholder 'username': {url}"
+        )
+        assert "example.com" not in url.lower(), (
+            f"{key} URL contains placeholder domain: {url}"
+        )
+
+    # Should have key URLs
+    assert "Homepage" in urls or "Repository" in urls, (
+        "Should have either Homepage or Repository URL"
+    )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
