@@ -1,10 +1,8 @@
 """Tests for the CLI module."""
 
 import json
-import sys
 from unittest.mock import Mock, patch
 
-import pytest
 from click.testing import CliRunner
 
 from athena_client.cli import _create_client, _format_output, cli
@@ -339,14 +337,14 @@ class TestCLI:
         # Verify it's the actual module, not None
         assert hasattr(click, "command")
 
-    def test_rich_import_error(self):
-        """Test ImportError handling for rich."""
+    def test_rich_always_available(self):
+        """Test that rich is always available (it's a core dependency now)."""
+        # Since rich is now a core dependency, it should always be importable
+        import rich
 
-        module_name = "athena_client.cli"
-        sys.modules.pop(module_name, None)
-        with patch.dict("sys.modules", {"rich": None}):
-            with pytest.raises(SystemExit):
-                __import__("athena_client.cli")
+        assert rich is not None
+        # Verify it's the actual module, not None
+        assert hasattr(rich, "console")
 
     def test_main_entrypoint(self):
         """Test CLI main entrypoint."""
