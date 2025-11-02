@@ -5,14 +5,14 @@ This module provides standardized error handling for optional dependencies,
 ensuring consistent user-facing error messages across the package.
 """
 
-from typing import NoReturn
+from typing import NoReturn, Optional
 
 
 def require_optional_package(
     package_name: str,
     feature: str,
     extra: str,
-    import_error: ImportError,
+    import_error: Optional[ImportError] = None,
 ) -> NoReturn:
     """
     Raise a standardized error for missing optional dependencies.
@@ -21,7 +21,7 @@ def require_optional_package(
         package_name: Name of the missing package (e.g., "pandas")
         feature: Feature that requires the package (e.g., "DataFrame support")
         extra: pip extra to install (e.g., "pandas")
-        import_error: Original ImportError that triggered this
+        import_error: Original ImportError that triggered this (optional)
 
     Raises:
         ImportError: With helpful message about installing the extra

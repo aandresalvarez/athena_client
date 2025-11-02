@@ -90,6 +90,7 @@ dev = [
   "pytest-benchmark>=4.0",
   "bandit>=1.7.5",
   "cyclonedx-python-lib>=5.2.0",
+  "packaging>=21.0",
   "types-requests",
   "types-PyYAML",
   "pandas-stubs",

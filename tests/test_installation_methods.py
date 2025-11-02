@@ -14,6 +14,9 @@ from typing import List, Optional, Tuple
 
 import pytest
 
+# Get expected version from the package
+from athena_client import __version__ as EXPECTED_VERSION
+
 
 def run_command(cmd: List[str], cwd: Optional[str] = None) -> Tuple[int, str, str]:
     """
@@ -31,7 +34,7 @@ def run_command(cmd: List[str], cwd: Optional[str] = None) -> Tuple[int, str, st
         cwd=cwd,
         capture_output=True,
         text=True,
-        timeout=300,  # 5 minute timeout
+        timeout=120,  # 2 minute timeout
     )
     return result.returncode, result.stdout, result.stderr
 
@@ -91,7 +94,7 @@ class TestInstallationMethods:
             ]
         )
         assert exit_code == 0, f"Failed to import: {stderr}"
-        assert "1.0.30" in stdout
+        assert EXPECTED_VERSION in stdout
 
         # Verify CLI works
         athena_cmd = (
@@ -101,7 +104,7 @@ class TestInstallationMethods:
         )
         exit_code, stdout, stderr = run_command([str(athena_cmd), "--version"])
         assert exit_code == 0, f"CLI failed: {stderr}"
-        assert "1.0.30" in stdout
+        assert EXPECTED_VERSION in stdout
 
     @pytest.mark.skipif(not is_tool_available("pipx"), reason="pipx not installed")
     def test_pipx_install(self, tmp_path: Path):
@@ -134,7 +137,7 @@ class TestInstallationMethods:
             timeout=30,
         )
         assert result.returncode == 0, f"athena --version failed: {result.stderr}"
-        assert "1.0.30" in result.stdout
+        assert EXPECTED_VERSION in result.stdout
 
         # Test that imports work (regression test for original pipx bug)
         result = subprocess.run(
@@ -195,7 +198,7 @@ build-backend = "poetry.core.masonry.api"
             cwd=str(project_dir),
         )
         assert exit_code == 0, f"Import failed: {stderr}"
-        assert "1.0.30" in stdout
+        assert EXPECTED_VERSION in stdout
 
     @pytest.mark.skipif(not is_tool_available("uv"), reason="uv not installed")
     def test_uv_install(self, tmp_path: Path):
@@ -229,7 +232,7 @@ build-backend = "poetry.core.masonry.api"
             ]
         )
         assert exit_code == 0, f"Failed to import: {stderr}"
-        assert "1.0.30" in stdout
+        assert EXPECTED_VERSION in stdout
 
 
 @pytest.mark.integration
