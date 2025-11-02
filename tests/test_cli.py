@@ -1,10 +1,8 @@
 """Tests for the CLI module."""
 
 import json
-import sys
 from unittest.mock import Mock, patch
 
-import pytest
 from click.testing import CliRunner
 
 from athena_client.cli import _create_client, _format_output, cli
@@ -330,33 +328,23 @@ class TestCLI:
         mock_client.summary.assert_called_once()
         mock_format_output.assert_called_once()
 
-    def test_click_import_error(self):
-        """Test CLI import error handling."""
-        import importlib
+    def test_click_always_available(self):
+        """Test that click is always available (it's a core dependency now)."""
+        # Since click is now a core dependency, it should always be importable
+        import click
 
-        # Save original click import
-        original_click = sys.modules.get("click")
-        try:
-            sys.modules["click"] = None
-            import athena_client
-            import athena_client.cli
+        assert click is not None
+        # Verify it's the actual module, not None
+        assert hasattr(click, "command")
 
-            with pytest.raises(SystemExit):
-                importlib.reload(athena_client.cli)
-        finally:
-            if original_click is not None:
-                sys.modules["click"] = original_click
-            else:
-                del sys.modules["click"]
+    def test_rich_always_available(self):
+        """Test that rich is always available (it's a core dependency now)."""
+        # Since rich is now a core dependency, it should always be importable
+        import rich
 
-    def test_rich_import_error(self):
-        """Test ImportError handling for rich."""
-
-        module_name = "athena_client.cli"
-        sys.modules.pop(module_name, None)
-        with patch.dict("sys.modules", {"rich": None}):
-            with pytest.raises(SystemExit):
-                __import__("athena_client.cli")
+        assert rich is not None
+        # Verify it's the actual module, not None
+        assert hasattr(rich, "console")
 
     def test_main_entrypoint(self):
         """Test CLI main entrypoint."""

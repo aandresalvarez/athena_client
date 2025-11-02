@@ -14,7 +14,17 @@ This project is provided as-is, without warranty of any kind.
 
 ## Installation
 
-### Lightweight Installation (Recommended)
+### Using pipx (Recommended for CLI)
+
+For isolated CLI installation without affecting your system Python:
+
+```bash
+pipx install athena-client
+```
+
+This creates an isolated environment and makes the `athena` command available globally.
+
+### Lightweight Installation (Recommended for Library Use)
 
 For core functionality with CLI and minimal dependencies:
 

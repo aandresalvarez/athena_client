@@ -9,17 +9,8 @@ import json
 import sys
 from typing import Any, List, Optional, cast
 
-# Check for required dependencies at import time
-try:
-    import click
-    import rich
-except ImportError as e:
-    print(
-        f"Missing required dependency: {e.name}. "
-        "Install with 'pip install \"athena-client[cli]\"'"
-    )
-    sys.exit(1)
-
+import click
+import rich
 from rich.console import Console
 from rich.table import Table
 
@@ -65,7 +56,7 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
     """
 
     # Convert Pydantic models and SearchResult to dicts/lists for serialization
-    def to_serializable(obj: object) -> Any:
+    def to_serializable(obj: Any) -> Any:
         # If the object has a .to_list() method (e.g., SearchResult), use it
         if hasattr(obj, "to_list") and callable(obj.to_list):
             return to_serializable(obj.to_list())
