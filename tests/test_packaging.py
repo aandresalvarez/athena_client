@@ -226,5 +226,63 @@ def test_no_dependency_duplication(pyproject_data):
         )
 
 
+def test_version_consistency(pyproject_data):
+    """
+    Test that version in __init__.py matches pyproject.toml.
+
+    Regression test: versions can get out of sync during releases,
+    causing runtime version to differ from package version.
+    """
+    from athena_client import __version__
+
+    pyproject_version = pyproject_data.get("project", {}).get("version", "")
+
+    assert __version__ == pyproject_version, (
+        f"Version mismatch: __init__.py has {__version__} "
+        f"but pyproject.toml has {pyproject_version}"
+    )
+
+
+def test_py_typed_marker_exists():
+    """
+    Test that py.typed marker file exists.
+
+    This file is required for type checkers to recognize the package
+    as typed and provide type hints to users.
+    """
+    py_typed_path = Path(__file__).parent.parent / "athena_client" / "py.typed"
+
+    assert py_typed_path.exists(), (
+        "py.typed marker file is missing. This file is required for "
+        "type checkers (mypy, pyright) to recognize the package as typed. "
+        "Create an empty file at athena_client/py.typed"
+    )
+
+
+def test_py_typed_included_in_wheel(pyproject_data):
+    """
+    Test that py.typed is configured to be included in the wheel.
+
+    Without proper configuration, py.typed won't be included in the
+    distributed package even if it exists in the source.
+    """
+    tool_hatch = pyproject_data.get("tool", {}).get("hatch", {})
+    build_config = tool_hatch.get("build", {})
+
+    # Check for py.typed in wheel targets or force-include
+    wheel_targets = build_config.get("targets", {}).get("wheel", {})
+
+    # Either in force-include or packages should include it
+    has_force_include = "force-include" in wheel_targets
+
+    # If using force-include, py.typed should be there
+    if has_force_include:
+        force_include = wheel_targets.get("force-include", {})
+        py_typed_included = any("py.typed" in key for key in force_include.keys())
+        assert py_typed_included, (
+            "py.typed should be in wheel force-include configuration"
+        )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

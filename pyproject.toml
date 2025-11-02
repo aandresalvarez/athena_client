@@ -28,6 +28,9 @@ dependencies = [
 [tool.hatch.build.targets.wheel]
 packages = ["athena_client"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"athena_client/py.typed" = "athena_client/py.typed"
+
 [project.optional-dependencies]
 # Core functionality - minimal dependencies (same as main dependencies)
 core = [
