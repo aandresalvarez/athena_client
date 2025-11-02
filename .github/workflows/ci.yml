@@ -26,16 +26,17 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
+    # Python 3.14 temporarily excluded until ecosystem (pytest plugins, deps) stabilizes.
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          allow-prereleases: true
+          # allow-prereleases removed (no 3.14 pre-release testing for now)
       - name: Install Hatch
         run: pip install hatch
       - name: Install dev deps
