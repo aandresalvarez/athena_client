@@ -98,38 +98,43 @@ class AsyncHttpClient:
         # Set up default headers
         self._setup_default_headers()
 
-    # List of browser-like User-Agents for fallback, aligned with sync client
+    # List of browser-like User-Agents for fallback, aligned with sync client (updated to 2025 versions)
     _USER_AGENTS = [
         (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         ),
         (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         ),
         (
             "Mozilla/5.0 (X11; Linux x86_64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         ),
         (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15"
         ),
         (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) "
-            "Gecko/20100101 Firefox/120.0"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) "
+            "Gecko/20100101 Firefox/133.0"
         ),
     ]
 
     def _setup_default_headers(self, user_agent_idx: int = 0) -> None:
         """Set up default headers for all requests, with optional User-Agent index."""
+        # DO NOT include Content-Type in default headers - add it only for POST/PUT requests
+        # Add browser-like security headers that modern browsers send
         default_headers = {
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Content-Type": "application/json",
+            "Accept": "application/json, text/plain, */*",  # Modern, simple Accept header
             "User-Agent": self._USER_AGENTS[user_agent_idx],
             "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://athena.ohdsi.org/",
+            "Referer": "https://athena.ohdsi.org/search-terms/terms",  # More realistic referer
+            "Origin": "https://athena.ohdsi.org",  # Origin header for CORS
+            "Sec-Fetch-Site": "same-origin",  # Browser security header
+            "Sec-Fetch-Mode": "cors",  # Browser security header
+            "Sec-Fetch-Dest": "empty",  # Browser security header
             "Connection": "keep-alive",
         }
         # Reset and apply new defaults
@@ -143,9 +148,10 @@ class AsyncHttpClient:
         """Compose final request headers from defaults and auth without duplication."""
         headers = dict(self.client.headers)
         headers.update(auth_headers)
+        # Only add Content-Type for requests with body (POST/PUT)
         if has_data:
             headers["Content-Type"] = "application/json"
-        headers.setdefault("Referer", "https://athena.ohdsi.org/")
+        headers.setdefault("Referer", "https://athena.ohdsi.org/search-terms/terms")
         headers.setdefault("Accept-Language", "en-US,en;q=0.9")
         headers.setdefault("User-Agent", self._USER_AGENTS[user_agent_idx])
         return headers
@@ -273,9 +279,10 @@ class AsyncHttpClient:
                 self._setup_default_headers(user_agent_idx=agent_idx)
                 headers = dict(self.client.headers)
                 headers.update(auth_headers)
+                # Only add Content-Type for requests with body (POST/PUT)
                 if data is not None:
                     headers["Content-Type"] = "application/json"
-                headers.setdefault("Referer", "https://athena.ohdsi.org/")
+                headers.setdefault("Referer", "https://athena.ohdsi.org/search-terms/terms")
                 headers.setdefault("Accept-Language", "en-US,en;q=0.9")
                 headers.setdefault("User-Agent", self._USER_AGENTS[agent_idx])
             try:

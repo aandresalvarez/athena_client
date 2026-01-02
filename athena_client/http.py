@@ -135,38 +135,43 @@ class HttpClient:
 
         return session
 
-    # List of browser-like User-Agents for fallback
+    # List of browser-like User-Agents for fallback (updated to 2025 versions)
     _USER_AGENTS = [
         (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         ),
         (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         ),
         (
             "Mozilla/5.0 (X11; Linux x86_64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         ),
         (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15"
         ),
         (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) "
-            "Gecko/20100101 Firefox/120.0"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) "
+            "Gecko/20100101 Firefox/133.0"
         ),
     ]
 
     def _setup_default_headers(self, user_agent_idx: int = 0) -> None:
         """Set up default headers for all requests, with optional User-Agent index."""
+        # DO NOT include Content-Type in default headers - add it only for POST/PUT requests
+        # Add browser-like security headers that modern browsers send
         default_headers = {
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Content-Type": "application/json",
+            "Accept": "application/json, text/plain, */*",  # Modern, simple Accept header
             "User-Agent": self._USER_AGENTS[user_agent_idx],
             "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://athena.ohdsi.org/",
+            "Referer": "https://athena.ohdsi.org/search-terms/terms",  # More realistic referer
+            "Origin": "https://athena.ohdsi.org",  # Origin header for CORS
+            "Sec-Fetch-Site": "same-origin",  # Browser security header
+            "Sec-Fetch-Mode": "cors",  # Browser security header
+            "Sec-Fetch-Dest": "empty",  # Browser security header
             "Connection": "keep-alive",
         }
         self.session.headers.clear()
@@ -398,6 +403,7 @@ class HttpClient:
         data: Any = None,
         params: Optional[Dict[str, Any]] = None,
         raw_response: bool = False,
+        timeout: Optional[int] = None,
     ) -> Union[Dict[str, Any], requests.Response]:
         """
         Make an HTTP request to the Athena API with enhanced retry and throttling.
@@ -411,6 +417,9 @@ class HttpClient:
         auth_headers = build_headers(method, url, body_bytes)
         headers = dict(self.session.headers)
         headers.update(auth_headers)
+        # Only add Content-Type for requests with body (POST/PUT)
+        if data is not None:
+            headers["Content-Type"] = "application/json"
         normalized_params = self._normalize_params(params)
         correlation_id = f"req-{id(self)}-{id(path)}"
         logger.debug(
@@ -426,13 +435,15 @@ class HttpClient:
                 headers = dict(self.session.headers)
                 headers.update(auth_headers)
             try:
+                # Use provided timeout or fall back to instance timeout
+                request_timeout = timeout if timeout is not None else self.timeout
                 response = self.session.request(
                     method=method,
                     url=url,
                     params=normalized_params,
                     data=body_bytes if data is not None else None,
                     headers=headers,
-                    timeout=self.timeout,
+                    timeout=request_timeout,
                 )
                 logger.debug(
                     f"[{correlation_id}] {response.status_code} {response.reason}"
@@ -488,6 +499,7 @@ class HttpClient:
         path: str,
         params: Optional[Dict[str, Any]] = None,
         raw_response: bool = False,
+        timeout: Optional[int] = None,
     ) -> Union[Dict[str, Any], requests.Response]:
         """
         Make a GET request to the Athena API.
@@ -496,11 +508,19 @@ class HttpClient:
             path: API endpoint path
             params: Query parameters
             raw_response: Whether to return the raw response object
+            timeout: Optional timeout override for this request
 
         Returns:
             Parsed JSON response or raw Response object
         """
-        return self.request("GET", path, params=params, raw_response=raw_response)
+        # Store original timeout and restore after request
+        original_timeout = self.timeout
+        if timeout is not None:
+            self.timeout = timeout
+        try:
+            return self.request("GET", path, params=params, raw_response=raw_response)
+        finally:
+            self.timeout = original_timeout
 
     def post(
         self,
