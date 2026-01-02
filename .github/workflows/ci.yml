@@ -47,6 +47,11 @@ jobs:
         run: hatch run pip list
       - name: Test suite
         run: hatch run cov
+      - name: Live API Tests
+        if: matrix.python-version == '3.9'
+        env:
+          ATHENA_LIVE_TESTS: "true"
+        run: hatch run pytest tests/test_live_api.py -v
       - name: Generate SBOM
         if: github.ref == 'refs/heads/main' && matrix.python-version == '3.9'
         run: make cyclonedx

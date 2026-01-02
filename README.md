@@ -188,7 +188,7 @@ athena search "aspirin" --output csv | tail -n +2 > aspirin.csv
 
 For advanced concept discovery and mapping:
 
-> Important: The client (sync and async) now sends browser-like headers by default and works anonymously against the public OHDSI Athena. No token is required for the public server. If your organization runs a private Athena that enforces authentication and you encounter 401/403, provide credentials (e.g., set `ATHENA_TOKEN` or pass `token` to the client).
+> Important: The client (sync and async) now sends browser-like headers by default and works anonymously against the public OHDSI Athena. No credentials are required for the public server. If your organization runs a private Athena that enforces authentication and you encounter 401/403, configure credentials via the supported auth settings (for example, HMAC with `client_id` and `private_key`).
 >
 > Note: ConceptExplorer is async-only and requires `AthenaAsyncClient`. The regular `Athena` (sync) client supports core APIs (search, details, relationships, graph, summary) but not ConceptExplorer.
 
@@ -240,12 +240,6 @@ from athena_client import Athena
 # Connect to a custom Athena server
 athena = Athena(base_url="https://your-athena-server.com/api/v1")
 
-# Connect with authentication
-athena = Athena(
-    base_url="https://your-athena-server.com/api/v1",
-    token="your-bearer-token"
-)
-
 # Connect with HMAC authentication
 athena = Athena(
     base_url="https://your-athena-server.com/api/v1",
@@ -263,7 +257,6 @@ Set environment variables for persistent configuration:
 export ATHENA_BASE_URL="https://your-athena-server.com/api/v1"
 
 # Set authentication (optional)
-export ATHENA_TOKEN="your-bearer-token"
 export ATHENA_CLIENT_ID="your-client-id"
 export ATHENA_PRIVATE_KEY="your-private-key"
 ```
@@ -274,7 +267,6 @@ Create a `.env` file in your project directory:
 
 ```env
 ATHENA_BASE_URL=https://your-athena-server.com/api/v1
-ATHENA_TOKEN=your-bearer-token
 ATHENA_CLIENT_ID=your-client-id
 ATHENA_PRIVATE_KEY=your-private-key
 ```
@@ -330,7 +322,7 @@ Settings are applied in this order (highest to lowest priority):
 | **Public OHDSI Athena** | `Athena()` (default) |
 | **Private Athena Instance** | `Athena(base_url="https://your-server.com/api/v1")` |
 | **Local Development** | `Athena(base_url="http://localhost:8080/api/v1")` |
-| **Authenticated Server** | `Athena(base_url="...", token="...")` |
+| **Authenticated Server (HMAC)** | `Athena(base_url="...", client_id="...", private_key="...")` |
 | **High-Latency Network** | `Athena(base_url="...", timeout=120, max_retries=5)` |
 
 ---
@@ -562,5 +554,4 @@ python examples/example_name.py
 - **🔧 [Contributing Guide](https://github.com/aandresalvarez/athena_client/blob/main/CONTRIBUTING.md)** - How to contribute to the project
 - **🗺️ [Roadmap](https://github.com/aandresalvarez/athena_client/blob/main/ROADMAP.md)** - Planned features and enhancements
 - **📦 [Lightweight Installation Guide](https://github.com/aandresalvarez/athena_client/blob/main/LIGHTWEIGHT_INSTALLATION.md)** - Detailed dependency management
-
 

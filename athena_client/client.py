@@ -201,17 +201,8 @@ class AthenaClient:
         with progress_context(**progress_kwargs) if progress_kwargs else nullcontext():
             for attempt in range(max_attempts):
                 try:
-                    # Create a temporary HTTP client with the appropriate timeout
-                    temp_http = HttpClient(
-                        base_url=self.http.base_url,
-                        token=str(self.http.session.headers.get("Authorization", "")),
-                        timeout=operation_timeout,
-                        max_retries=1,  # We handle retries manually
-                        enable_throttling=self.http.enable_throttling,
-                        throttle_delay_range=self.http.throttle_delay_range,
-                    )
-
-                    response = temp_http.get("/concepts", params=params)
+                    # Reuse existing HTTP client session - just pass timeout dynamically
+                    response = self.http.get("/concepts", params=params, timeout=operation_timeout)
 
                     # Raise APIError for any error response with errorMessage
                     # and errorCode
@@ -517,18 +508,9 @@ class AthenaClient:
         with progress_context(**progress_kwargs) if progress_kwargs else nullcontext():
             for attempt in range(max_attempts):
                 try:
-                    # Create a temporary HTTP client with the appropriate timeout
-                    temp_http = HttpClient(
-                        base_url=self.http.base_url,
-                        token=str(self.http.session.headers.get("Authorization", "")),
-                        timeout=operation_timeout,
-                        max_retries=1,  # We handle retries manually
-                        enable_throttling=self.http.enable_throttling,
-                        throttle_delay_range=self.http.throttle_delay_range,
-                    )
-
-                    response = temp_http.get(
-                        f"/concepts/{concept_id}/relations", params=params
+                    # Reuse existing HTTP client session - just pass timeout dynamically
+                    response = self.http.get(
+                        f"/concepts/{concept_id}/relations", params=params, timeout=operation_timeout
                     )
 
                     # Check if the response is an error response

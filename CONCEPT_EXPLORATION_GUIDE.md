@@ -479,7 +479,8 @@ new_settings = reload_settings()
 ```bash
 # Core settings
 export ATHENA_BASE_URL="https://your-server.com/api/v1"
-export ATHENA_TOKEN="your-token"
+export ATHENA_CLIENT_ID="your-client-id"
+export ATHENA_PRIVATE_KEY="your-private-key"
 export ATHENA_TIMEOUT_SECONDS="60"
 export ATHENA_MAX_RETRIES="5"
 
@@ -639,7 +640,7 @@ results = athena.search("aspirin")
 
 The ConceptExplorer provides powerful async features for discovering standard concepts and building concept mappings.
 
-> Note: ConceptExplorer is async-only and requires `AthenaAsyncClient`. The public OHDSI Athena works anonymously; no token is required. If a private instance enforces auth and you see 401/403, provide credentials (e.g., `ATHENA_TOKEN`).
+> Note: ConceptExplorer is async-only and requires `AthenaAsyncClient`. The public OHDSI Athena works anonymously; no credentials are required. If a private instance enforces auth and you see 401/403, configure credentials (for example, HMAC with `ATHENA_CLIENT_ID` and `ATHENA_PRIVATE_KEY`).
 
 Setup for the examples in this section:
 
