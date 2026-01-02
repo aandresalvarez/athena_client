@@ -302,6 +302,32 @@ class TestHttpClient:
             assert call_args[1]["data"] == b'{"key": "value"}'
 
     @patch("athena_client.http.build_headers")
+    def test_request_includes_security_headers(
+        self, mock_build_headers: Mock
+    ) -> None:
+        """Security headers should be sent on actual requests."""
+        mock_build_headers.return_value = {}
+
+        client = HttpClient()
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.json.return_value = {"result": "success"}
+        mock_response.text = "success response"
+        mock_response.reason = "OK"
+
+        with patch.object(
+            client.session, "request", return_value=mock_response
+        ) as mock_request:
+            client.request("GET", "/test")
+            call_headers = mock_request.call_args[1]["headers"]
+            assert call_headers["Accept"] == "application/json, text/plain, */*"
+            assert call_headers["Origin"] == "https://athena.ohdsi.org"
+            assert call_headers["Sec-Fetch-Site"] == "same-origin"
+            assert call_headers["Sec-Fetch-Mode"] == "cors"
+            assert call_headers["Sec-Fetch-Dest"] == "empty"
+
+    @patch("athena_client.http.build_headers")
     def test_request_headers_omit_content_type_for_get(
         self, mock_build_headers: Mock
     ) -> None:
@@ -322,6 +348,41 @@ class TestHttpClient:
             client.request("GET", "/test")
             call_headers = mock_request.call_args[1]["headers"]
             assert "Content-Type" not in call_headers
+
+    @patch("athena_client.http.build_headers")
+    def test_request_waf_403_html_retry_regression(
+        self, mock_build_headers: Mock
+    ) -> None:
+        """Regression test for issue #15: HTML 403 should trigger UA fallback."""
+        mock_build_headers.return_value = {}
+
+        client = HttpClient()
+        first_response = Mock()
+        first_response.status_code = 403
+        first_response.headers = {"Content-Type": "text/html"}
+        first_response.text = "<html>Forbidden</html>"
+        first_response.reason = "Forbidden"
+
+        second_response = Mock()
+        second_response.status_code = 200
+        second_response.headers = {"Content-Type": "application/json"}
+        second_response.json.return_value = {"result": "success"}
+        second_response.text = "ok"
+        second_response.reason = "OK"
+
+        with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
+            with patch.object(
+                client.session,
+                "request",
+                side_effect=[first_response, second_response],
+            ) as mock_request:
+                result = client.request("GET", "/test")
+                assert result == {"result": "success"}
+                assert mock_request.call_count == 2
+                retry_headers = mock_request.call_args_list[1][1]["headers"]
+                assert retry_headers["Origin"] == "https://athena.ohdsi.org"
+                assert retry_headers["Sec-Fetch-Site"] == "same-origin"
+                assert "Content-Type" not in retry_headers
 
     @patch("athena_client.http.build_headers")
     def test_request_retry_preserves_content_type_for_body(
