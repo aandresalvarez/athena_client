@@ -434,6 +434,9 @@ class HttpClient:
                 self._setup_default_headers(user_agent_idx=agent_idx)
                 headers = dict(self.session.headers)
                 headers.update(auth_headers)
+                # Only add Content-Type for requests with body (POST/PUT)
+                if data is not None:
+                    headers["Content-Type"] = "application/json"
             try:
                 # Use provided timeout or fall back to instance timeout
                 request_timeout = timeout if timeout is not None else self.timeout
@@ -513,14 +516,15 @@ class HttpClient:
         Returns:
             Parsed JSON response or raw Response object
         """
-        # Store original timeout and restore after request
-        original_timeout = self.timeout
-        if timeout is not None:
-            self.timeout = timeout
-        try:
+        if timeout is None:
             return self.request("GET", path, params=params, raw_response=raw_response)
-        finally:
-            self.timeout = original_timeout
+        return self.request(
+            "GET",
+            path,
+            params=params,
+            raw_response=raw_response,
+            timeout=timeout,
+        )
 
     def post(
         self,
@@ -528,6 +532,7 @@ class HttpClient:
         data: Dict[str, Any],
         params: Optional[Dict[str, Any]] = None,
         raw_response: bool = False,
+        timeout: Optional[int] = None,
     ) -> Union[Dict[str, Any], requests.Response]:
         """
         Make a POST request to the Athena API.
@@ -537,12 +542,22 @@ class HttpClient:
             data: Request body data
             params: Query parameters
             raw_response: Whether to return the raw response object
+            timeout: Optional timeout override for this request
 
         Returns:
             Parsed JSON response or raw Response object
         """
+        if timeout is None:
+            return self.request(
+                "POST", path, data=data, params=params, raw_response=raw_response
+            )
         return self.request(
-            "POST", path, data=data, params=params, raw_response=raw_response
+            "POST",
+            path,
+            data=data,
+            params=params,
+            raw_response=raw_response,
+            timeout=timeout,
         )
 
     def close(self) -> None:

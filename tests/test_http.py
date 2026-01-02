@@ -302,6 +302,60 @@ class TestHttpClient:
             assert call_args[1]["data"] == b'{"key": "value"}'
 
     @patch("athena_client.http.build_headers")
+    def test_request_headers_omit_content_type_for_get(
+        self, mock_build_headers: Mock
+    ) -> None:
+        """GET requests should not set Content-Type."""
+        mock_build_headers.return_value = {}
+
+        client = HttpClient()
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.json.return_value = {"result": "success"}
+        mock_response.text = "success response"
+        mock_response.reason = "OK"
+
+        with patch.object(
+            client.session, "request", return_value=mock_response
+        ) as mock_request:
+            client.request("GET", "/test")
+            call_headers = mock_request.call_args[1]["headers"]
+            assert "Content-Type" not in call_headers
+
+    @patch("athena_client.http.build_headers")
+    def test_request_retry_preserves_content_type_for_body(
+        self, mock_build_headers: Mock
+    ) -> None:
+        """Fallback retries should retain Content-Type for requests with a body."""
+        mock_build_headers.return_value = {}
+
+        client = HttpClient()
+        first_response = Mock()
+        first_response.status_code = 200
+        first_response.headers = {"Content-Type": "text/html"}
+        first_response.text = "blocked"
+        first_response.reason = "OK"
+
+        second_response = Mock()
+        second_response.status_code = 200
+        second_response.headers = {"Content-Type": "application/json"}
+        second_response.json.return_value = {"result": "success"}
+        second_response.text = "ok"
+        second_response.reason = "OK"
+
+        with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
+            with patch.object(
+                client.session,
+                "request",
+                side_effect=[first_response, second_response],
+            ) as mock_request:
+                result = client.request("POST", "/test", data={"key": "value"})
+                assert result == {"result": "success"}
+                retry_headers = mock_request.call_args_list[1][1]["headers"]
+                assert retry_headers["Content-Type"] == "application/json"
+
+    @patch("athena_client.http.build_headers")
     def test_request_raw_response(self, mock_build_headers):
         """Test request with raw response."""
         mock_build_headers.return_value = {}
@@ -369,6 +423,24 @@ class TestHttpClient:
 
             mock_request.assert_called_once_with(
                 "POST", "/test", data={"key": "value"}, params=None, raw_response=False
+            )
+            assert result == {"result": "success"}
+
+    def test_post_method_with_timeout(self) -> None:
+        """Test POST method with a timeout override."""
+        client = HttpClient()
+
+        with patch.object(client, "request") as mock_request:
+            mock_request.return_value = {"result": "success"}
+            result = client.post("/test", data={"key": "value"}, timeout=10)
+
+            mock_request.assert_called_once_with(
+                "POST",
+                "/test",
+                data={"key": "value"},
+                params=None,
+                raw_response=False,
+                timeout=10,
             )
             assert result == {"result": "success"}
 

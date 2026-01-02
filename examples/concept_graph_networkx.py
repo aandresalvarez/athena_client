@@ -11,8 +11,9 @@ From repo with Hatch:
   hatch run pip install networkx matplotlib
   hatch run python examples/concept_graph_networkx.py 1127433 3 2
 
-Auth (if needed):
-  export ATHENA_TOKEN="<your_token>"  # optional if API allows anonymous graph
+Auth (if needed by your server):
+  export ATHENA_CLIENT_ID="your-client-id"
+  export ATHENA_PRIVATE_KEY="your-private-key"
 
 Notes:
 - Saves a PNG to the output/ directory (headless friendly).

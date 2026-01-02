@@ -183,9 +183,9 @@ build-backend = "poetry.core.masonry.api"
 """
         )
 
-        # Install dependencies
+        # Install dependencies without packaging the test project itself.
         exit_code, stdout, stderr = run_command(
-            ["poetry", "install"],
+            ["poetry", "install", "--no-root"],
             cwd=str(project_dir),
         )
         assert exit_code == 0, f"poetry install failed: {stderr}"

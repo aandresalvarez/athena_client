@@ -237,6 +237,7 @@ class AsyncHttpClient:
         params: Optional[Dict[str, Any]] = None,
         data: Optional[Dict[str, Any]] = None,
         raw_response: bool = False,
+        timeout: Optional[int] = None,
     ) -> Union[Dict[str, Any], httpx.Response]:
         """
         Make an HTTP request to the Athena API.
@@ -247,6 +248,7 @@ class AsyncHttpClient:
             params: Query parameters
             data: Request body data
             raw_response: Whether to return the raw response object
+            timeout: Optional timeout override for this request
 
         Returns:
             Parsed JSON response or raw Response object
@@ -277,22 +279,20 @@ class AsyncHttpClient:
             if agent_idx > 0:
                 logger.info(f"Retrying with fallback User-Agent: {agent}")
                 self._setup_default_headers(user_agent_idx=agent_idx)
-                headers = dict(self.client.headers)
-                headers.update(auth_headers)
-                # Only add Content-Type for requests with body (POST/PUT)
-                if data is not None:
-                    headers["Content-Type"] = "application/json"
-                headers.setdefault("Referer", "https://athena.ohdsi.org/search-terms/terms")
-                headers.setdefault("Accept-Language", "en-US,en;q=0.9")
-                headers.setdefault("User-Agent", self._USER_AGENTS[agent_idx])
+                headers = self._compose_request_headers(
+                    auth_headers,
+                    agent_idx,
+                    data is not None,
+                )
             try:
+                request_timeout = timeout if timeout is not None else self.timeout
                 response = await self.client.request(
                     method=method,
                     url=url,
                     params=params,
                     content=body_bytes if data is not None else None,
                     headers=headers,
-                    timeout=self.timeout,
+                    timeout=request_timeout,
                 )
 
                 logger.debug(
@@ -374,6 +374,7 @@ class AsyncHttpClient:
         data: Any = None,
         params: Optional[Dict[str, Any]] = None,
         raw_response: bool = False,
+        timeout: Optional[int] = None,
     ) -> Union[Dict[str, Any], httpx.Response]:
         """
         Make a POST request to the Athena API.
@@ -383,12 +384,22 @@ class AsyncHttpClient:
             data: Request body data
             params: Query parameters
             raw_response: Whether to return the raw response object
+            timeout: Optional timeout override for this request
 
         Returns:
             Parsed JSON response or raw Response object
         """
+        if timeout is None:
+            return await self.request(
+                "POST", path, data=data, params=params, raw_response=raw_response
+            )
         return await self.request(
-            "POST", path, data=data, params=params, raw_response=raw_response
+            "POST",
+            path,
+            data=data,
+            params=params,
+            raw_response=raw_response,
+            timeout=timeout,
         )
 
 

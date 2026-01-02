@@ -33,6 +33,17 @@ make ci-test      # Tests with coverage (matches GitHub Actions test job)
 | `make dev-setup` | Setup development environment | First time setup |
 | `make pre-commit` | Quality + tests (recommended before commit) | Pre-commit hook |
 
+### Live API Tests (Opt-In)
+
+Live API tests run against the real Athena API and are skipped unless
+`ATHENA_LIVE_TESTS=true` is set.
+
+```bash
+ATHENA_LIVE_TESTS=true pytest tests/test_live_api.py -v
+```
+
+Live API tests always run anonymously.
+
 ## CI Pipeline Details
 
 ### Security Job (`make ci-security`)

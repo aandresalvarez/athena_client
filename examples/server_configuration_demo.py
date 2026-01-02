@@ -74,16 +74,7 @@ def demo_authentication():
     print("\n🔐 AUTHENTICATION CONFIGURATION")
     print("=" * 50)
     
-    print("\n1. Bearer Token Authentication:")
-    print("-" * 40)
-    token_athena = Athena(
-        base_url="https://your-secure-athena.com/api/v1",
-        token="your-bearer-token-here"
-    )
-    print(f"✅ Base URL: {token_athena.http.base_url}")
-    print(f"✅ Authentication: Bearer token configured")
-    
-    print("\n2. HMAC Authentication:")
+    print("\n1. HMAC Authentication:")
     print("-" * 40)
     hmac_athena = Athena(
         base_url="https://your-hmac-athena.com/api/v1",
@@ -93,7 +84,7 @@ def demo_authentication():
     print(f"✅ Base URL: {hmac_athena.http.base_url}")
     print(f"✅ Authentication: HMAC configured")
     
-    print("\n3. No Authentication (Public Server):")
+    print("\n2. No Authentication (Public Server):")
     print("-" * 40)
     public_athena = Athena()  # Default public server
     print(f"✅ Base URL: {public_athena.http.base_url}")
@@ -108,14 +99,14 @@ def demo_environment_variables():
     print("\n1. Environment Variable Examples:")
     print("-" * 40)
     print("export ATHENA_BASE_URL='https://your-athena-server.com/api/v1'")
-    print("export ATHENA_TOKEN='your-bearer-token'")
+    print("export ATHENA_CLIENT_ID='your-client-id'")
+    print("export ATHENA_PRIVATE_KEY='your-private-key'")
     print("export ATHENA_TIMEOUT_SECONDS='60'")
     print("export ATHENA_MAX_RETRIES='5'")
     
     print("\n2. .env File Example:")
     print("-" * 40)
     print("ATHENA_BASE_URL=https://your-athena-server.com/api/v1")
-    print("ATHENA_TOKEN=your-bearer-token")
     print("ATHENA_CLIENT_ID=your-client-id")
     print("ATHENA_PRIVATE_KEY=your-private-key")
     print("ATHENA_TIMEOUT_SECONDS=60")
@@ -183,7 +174,6 @@ def demo_cli_configuration():
     print("\n2. Environment Variables for CLI:")
     print("-" * 40)
     print("export ATHENA_BASE_URL='https://your-server.com/api/v1'")
-    print("export ATHENA_TOKEN='your-token'")
     print("athena search 'aspirin'  # Uses environment variables")
     
     print("\n3. CLI with Custom Timeout and Retries:")
@@ -214,8 +204,8 @@ def demo_common_scenarios():
         },
         {
             "name": "Authenticated Server",
-            "config": "Athena(base_url='...', token='...')",
-            "description": "Server requiring bearer token authentication"
+            "config": "Athena(base_url='...', client_id='...', private_key='...')",
+            "description": "Server requiring HMAC authentication"
         },
         {
             "name": "High-Latency Network",
