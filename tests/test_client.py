@@ -358,8 +358,7 @@ class TestClientMethods:
 class TestErrorScenarios:
     """Test various error scenarios."""
 
-    @patch("athena_client.client.HttpClient")
-    def test_authentication_error(self, mock_http_client_class, athena_client):
+    def test_authentication_error(self, athena_client):
         """Test authentication error handling."""
         error_response = {
             "result": None,
@@ -367,18 +366,15 @@ class TestErrorScenarios:
             "errorCode": "AUTH_ERROR",
         }
 
-        # Mock the HttpClient class to return our error response
-        mock_http_client = Mock()
-        mock_http_client.get.return_value = error_response
-        mock_http_client_class.return_value = mock_http_client
+        # Mock the existing http client instance's get method
+        athena_client.http.get = Mock(return_value=error_response)
 
         with pytest.raises(APIError) as exc_info:
             athena_client.search("test", max_retries=0)
 
         assert "Authentication failed" in str(exc_info.value)
 
-    @patch("athena_client.client.HttpClient")
-    def test_rate_limit_error(self, mock_http_client_class, athena_client):
+    def test_rate_limit_error(self, athena_client):
         """Test rate limit error handling."""
         error_response = {
             "result": None,
@@ -386,18 +382,15 @@ class TestErrorScenarios:
             "errorCode": "RATE_LIMIT",
         }
 
-        # Mock the HttpClient class to return our error response
-        mock_http_client = Mock()
-        mock_http_client.get.return_value = error_response
-        mock_http_client_class.return_value = mock_http_client
+        # Mock the existing http client instance's get method
+        athena_client.http.get = Mock(return_value=error_response)
 
         with pytest.raises(APIError) as exc_info:
             athena_client.search("test", max_retries=0)
 
         assert "Rate limit exceeded" in str(exc_info.value)
 
-    @patch("athena_client.client.HttpClient")
-    def test_client_error(self, mock_http_client_class, athena_client):
+    def test_client_error(self, athena_client):
         """Test client error handling."""
         error_response = {
             "result": None,
@@ -405,18 +398,15 @@ class TestErrorScenarios:
             "errorCode": "BAD_REQUEST",
         }
 
-        # Mock the HttpClient class to return our error response
-        mock_http_client = Mock()
-        mock_http_client.get.return_value = error_response
-        mock_http_client_class.return_value = mock_http_client
+        # Mock the existing http client instance's get method
+        athena_client.http.get = Mock(return_value=error_response)
 
         with pytest.raises(APIError) as exc_info:
             athena_client.search("test", max_retries=0)
 
         assert "Bad request" in str(exc_info.value)
 
-    @patch("athena_client.client.HttpClient")
-    def test_server_error(self, mock_http_client_class, athena_client):
+    def test_server_error(self, athena_client):
         """Test server error handling."""
         error_response = {
             "result": None,
@@ -424,10 +414,8 @@ class TestErrorScenarios:
             "errorCode": "SERVER_ERROR",
         }
 
-        # Mock the HttpClient class to return our error response
-        mock_http_client = Mock()
-        mock_http_client.get.return_value = error_response
-        mock_http_client_class.return_value = mock_http_client
+        # Mock the existing http client instance's get method
+        athena_client.http.get = Mock(return_value=error_response)
 
         with pytest.raises(APIError) as exc_info:
             athena_client.search("test", max_retries=0)
@@ -1021,9 +1009,12 @@ class TestAthenaClient:
         assert isinstance(result, ConceptRelationsGraph)
         assert len(result.terms) == 1
         assert len(result.links) == 1
-        mock_http_client.get.assert_called_once_with(
-            "/concepts/1/relations", params={"depth": 5, "zoomLevel": 3}
-        )
+        # Check that get was called with the correct params and timeout
+        mock_http_client.get.assert_called_once()
+        call_args = mock_http_client.get.call_args
+        assert call_args[0][0] == "/concepts/1/relations"
+        assert call_args[1]["params"] == {"depth": 5, "zoomLevel": 3}
+        assert "timeout" in call_args[1]  # timeout parameter should be present
 
     @patch("athena_client.client.HttpClient")
     def test_graph_retry_on_network_error(self, mock_http_client_class):
