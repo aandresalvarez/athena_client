@@ -51,10 +51,19 @@ release:
 	@echo "✅  Release pushed! GitHub Actions will handle the publishing."
 
 bump-version:
+	@echo "📦  Current version: $(shell grep '^version =' pyproject.toml | cut -d'"' -f2)"
 	@read -p "Enter new version: " v; \
-	sed -i '' "s/^version = \".*\"/version = \"$v\"/" pyproject.toml; \
-	sed -i '' "s/^__version__ = \".*\"/__version__ = \"$v\"/" athena_client/__init__.py; \
-	echo "Version updated to $v in pyproject.toml and athena_client/__init__.py"
+	if [ -z "$$v" ]; then \
+		echo "❌  Error: Version cannot be empty"; \
+		exit 1; \
+	fi; \
+	echo "🔄  Updating version to $$v..."; \
+	sed -i '' "s/^version = \".*\"/version = \"$$v\"/" pyproject.toml; \
+	sed -i '' "s/^__version__ = \".*\"/__version__ = \"$$v\"/" athena_client/__init__.py; \
+	echo "✅  Version updated to $$v in pyproject.toml and athena_client/__init__.py"; \
+	echo "📋  Verifying changes..."; \
+	echo "   pyproject.toml: $$(grep '^version =' pyproject.toml | cut -d'\"' -f2)"; \
+	echo "   __init__.py: $$(grep '^__version__' athena_client/__init__.py | cut -d'\"' -f2)"
 
 # CI Pipeline Targets (match GitHub Actions exactly)
 ci-security:
