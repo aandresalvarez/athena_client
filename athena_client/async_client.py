@@ -6,8 +6,10 @@ It uses httpx for HTTP requests and provides automatic retry logic, rate limitin
 and error handling.
 """
 
+import asyncio
 import logging
-from typing import Any, Dict, Optional, Union, cast
+import random
+from typing import Any, Dict, Optional, Tuple, Union, cast
 
 import orjson
 
@@ -36,6 +38,7 @@ from .models import (
     ConceptRelationship,
     ConceptSearchResponse,
 )
+from .query import Q
 from .search_result import SearchResult
 from .settings import get_settings
 from .utils.user_agents import USER_AGENTS, get_default_headers
@@ -63,6 +66,8 @@ class AsyncHttpClient:
         timeout: Optional[int] = None,
         max_retries: Optional[int] = None,
         backoff_factor: Optional[float] = None,
+        enable_throttling: bool = True,
+        throttle_delay_range: Tuple[float, float] = (0.1, 0.3),
         db_connector: Optional[DatabaseConnector] = None,
     ) -> None:
         """
@@ -76,6 +81,10 @@ class AsyncHttpClient:
             timeout: HTTP timeout in seconds
             max_retries: Maximum number of retry attempts
             backoff_factor: Exponential backoff factor for retries
+            enable_throttling: Whether to throttle requests to be respectful
+                to the server
+            throttle_delay_range: Range of delays for throttling (min, max)
+                in seconds
         """
         settings = get_settings()
 
@@ -93,6 +102,8 @@ class AsyncHttpClient:
         self.timeout = timeout or settings.ATHENA_TIMEOUT_SECONDS
         self.max_retries = max_retries or settings.ATHENA_MAX_RETRIES
         self.backoff_factor = backoff_factor or settings.ATHENA_BACKOFF_FACTOR
+        self.enable_throttling = enable_throttling
+        self.throttle_delay_range = throttle_delay_range
 
         # Create httpx client
         self.client = httpx.AsyncClient(timeout=self.timeout)
@@ -104,6 +115,22 @@ class AsyncHttpClient:
         """Set up default headers for all requests, with optional User-Agent index."""
         return get_default_headers(user_agent_idx=user_agent_idx)
 
+    async def _throttle_request(self) -> None:
+        """
+        Implement request throttling to prevent overwhelming the server.
+
+        This adds a small delay between requests to be respectful to the API.
+        """
+        if not self.enable_throttling:
+            return
+
+        delay = random.uniform(  # nosec B311
+            self.throttle_delay_range[0], self.throttle_delay_range[1]
+        )
+        await asyncio.sleep(delay)
+
+        logger.debug(f"Request throttled for {delay:.3f} seconds")
+
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self.client.aclose()
@@ -111,7 +138,14 @@ class AsyncHttpClient:
     def __del__(self) -> None:
         """Warning if the client was not properly closed."""
         try:
-            if hasattr(self, "client") and not self.client.is_closed:
+            import sys
+
+            if getattr(sys, "is_finalizing", lambda: False)():
+                return
+            client = getattr(self, "client", None)
+            if client is None:
+                return
+            if not getattr(client, "is_closed", True):
                 logger.warning(
                     "AsyncHttpClient was not closed. "
                     "Use 'async with' or call 'await client.aclose()' to avoid leaking resources."
@@ -247,6 +281,8 @@ class AsyncHttpClient:
         # Generate a correlation ID for logging
         correlation_id = f"req-{id(self)}-{id(path)}"
         logger.debug(f"[{correlation_id}] {method} {url}")
+
+        await self._throttle_request()
 
         last_exception: Optional[Exception] = None
         # Try with multiple browser-like User-Agents if needed
@@ -399,6 +435,8 @@ class AthenaAsyncClient:
         timeout: Optional[int] = None,
         max_retries: Optional[int] = None,
         backoff_factor: Optional[float] = None,
+        enable_throttling: bool = True,
+        throttle_delay_range: Tuple[float, float] = (0.1, 0.3),
         db_connector: Optional[DatabaseConnector] = None,
     ) -> None:
         """
@@ -412,6 +450,10 @@ class AthenaAsyncClient:
             timeout: HTTP timeout in seconds
             max_retries: Maximum number of retry attempts
             backoff_factor: Exponential backoff factor for retries
+            enable_throttling: Whether to throttle requests to be respectful
+                to the server
+            throttle_delay_range: Range of delays for throttling (min, max)
+                in seconds
             db_connector: Optional database connector for local OMOP validation
         """
         self.http = AsyncHttpClient(
@@ -422,6 +464,8 @@ class AthenaAsyncClient:
             timeout=timeout,
             max_retries=max_retries,
             backoff_factor=backoff_factor,
+            enable_throttling=enable_throttling,
+            throttle_delay_range=throttle_delay_range,
         )
         self.db_connector = db_connector
 
@@ -437,7 +481,17 @@ class AthenaAsyncClient:
     def __del__(self) -> None:
         """Warning if the client was not properly closed."""
         try:
-            if hasattr(self, "http") and hasattr(self.http, "client") and not self.http.client.is_closed:
+            import sys
+
+            if getattr(sys, "is_finalizing", lambda: False)():
+                return
+            http = getattr(self, "http", None)
+            if http is None:
+                return
+            client = getattr(http, "client", None)
+            if client is None:
+                return
+            if not getattr(client, "is_closed", True):
                 logger.warning(
                     "AthenaAsyncClient was not closed. "
                     "Use 'async with' or call 'await client.aclose()' to avoid leaking resources."
@@ -454,7 +508,7 @@ class AthenaAsyncClient:
 
     async def search_concepts(
         self,
-        query: str = "",
+        query: Union[str, Q] = "",
         exact: Optional[str] = None,
         fuzzy: bool = False,
         wildcard: Optional[str] = None,
@@ -487,14 +541,19 @@ class AthenaAsyncClient:
         Returns:
             Raw API response data
         """
+        if isinstance(query, Q):
+            query_str = str(query)
+        else:
+            query_str = query
+
         # Convert page to start parameter that the API expects
         start = page * page_size
 
         params: Dict[str, Any] = {"pageSize": page_size, "start": start}
 
         # Add query if provided
-        if query:
-            params["query"] = query
+        if query_str:
+            params["query"] = query_str
 
         # Add filters if provided
         if exact:
@@ -526,7 +585,7 @@ class AthenaAsyncClient:
 
     async def search(
         self,
-        query: str = "",
+        query: Union[str, Q] = "",
         size: int = 20,
         page: int = 0,
         **kwargs: Any,
@@ -545,8 +604,13 @@ class AthenaAsyncClient:
         """
         from .utils import estimate_query_size, get_operation_timeout
 
+        if isinstance(query, Q):
+            query_str = str(query)
+        else:
+            query_str = query
+
         # Calculate appropriate timeout based on query complexity
-        estimated_size = estimate_query_size(query)
+        estimated_size = estimate_query_size(query_str)
         operation_timeout = get_operation_timeout("search", estimated_size)
 
         # Convert size to pageSize for the API
@@ -558,7 +622,7 @@ class AthenaAsyncClient:
         if "timeout" not in search_kwargs:
             search_kwargs["timeout"] = operation_timeout
 
-        response_data = await self.search_concepts(query=query, **search_kwargs)
+        response_data = await self.search_concepts(query=query_str, **search_kwargs)
         response = ConceptSearchResponse.model_validate(response_data)
         return SearchResult(response, self, query=query, **kwargs)
 

@@ -34,9 +34,6 @@ class ExplorationState:
         default_factory=deque
     )  # BFS queue: (concept, depth, path)
     visited_ids: Set[int] = field(default_factory=set)  # Set of processed concept IDs
-    cache: Dict[int, ConceptDetails] = field(
-        default_factory=dict
-    )  # In-memory cache for concept details
     results: Dict[str, Any] = field(
         default_factory=lambda: {
             "direct_matches": [],
@@ -374,6 +371,29 @@ class ConceptExplorer:
             ):
                 ids_to_fetch_details.add(concept_id)
 
+    async def _record_visited_concept(
+        self,
+        concept: Concept,
+        state: ExplorationState,
+        next_depth: int,
+    ) -> None:
+        if state.discovery_lock is None:
+            if (
+                len(state.visited_ids) < state.max_total_concepts
+                and concept.id not in state.visited_ids
+            ):
+                state.queue.append((concept, next_depth, [concept.id]))
+                state.visited_ids.add(concept.id)
+            return
+
+        async with state.discovery_lock:
+            if (
+                len(state.visited_ids) < state.max_total_concepts
+                and concept.id not in state.visited_ids
+            ):
+                state.queue.append((concept, next_depth, [concept.id]))
+                state.visited_ids.add(concept.id)
+
     async def _discover_synonym_neighbors(
         self,
         concept: Concept,
@@ -517,15 +537,7 @@ class ConceptExplorer:
                         if len(state.results["relationship_matches"]) < state.max_concepts_per_list:
                             state.results["relationship_matches"].append(concept)
 
-                # Add to queue for further exploration if within limits
-                if (
-                    len(state.visited_ids) < state.max_total_concepts
-                    and concept.id not in state.visited_ids
-                ):
-                    # Create a simple path for this concept
-                    new_path = [concept.id]
-                    state.queue.append((concept, next_depth, new_path))
-                    state.visited_ids.add(concept.id)
+                await self._record_visited_concept(concept, state, next_depth)
 
         except Exception as e:
             logger.warning(f"Error processing batch results: {e}")

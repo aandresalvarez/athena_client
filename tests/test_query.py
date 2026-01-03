@@ -82,3 +82,15 @@ def test_complex_query():
     boosts = q.to_boosts()
 
     assert "should" in boosts["filter"]["bool"]
+
+
+def test_and_with_not_operator():
+    """Test AND operator combining with NOT."""
+    q = Q.term("aspirin") & -Q.term("ibuprofen")
+    boosts = q.to_boosts()
+
+    bool_filter = boosts["filter"]["bool"]
+    assert "must" in bool_filter
+    assert "must_not" in bool_filter
+    assert len(bool_filter["must"]) == 1
+    assert len(bool_filter["must_not"]) == 1

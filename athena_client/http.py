@@ -330,7 +330,12 @@ class HttpClient:
             else:
                 raise
 
-        except json.JSONDecodeError as e:
+        except (
+            orjson.JSONDecodeError,
+            json.JSONDecodeError,
+            TypeError,
+            ValueError,
+        ) as e:
             msg = (
                 f"Invalid JSON response from {url}: {e}. "
                 f"Raw text was: {raw_response_text[:1000]}..."

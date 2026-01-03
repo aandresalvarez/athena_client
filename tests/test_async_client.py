@@ -13,6 +13,7 @@ from athena_client.models import (
     ConceptRelationsGraph,
     ConceptRelationship,
 )
+from athena_client.query import Q
 
 
 class TestAsyncHttpClient:
@@ -45,12 +46,16 @@ class TestAsyncHttpClient:
             timeout=60,
             max_retries=5,
             backoff_factor=0.5,
+            enable_throttling=False,
+            throttle_delay_range=(0.2, 0.5),
         )
 
         assert client.base_url == "https://custom.api.com"
         assert client.timeout == 60
         assert client.max_retries == 5
         assert client.backoff_factor == 0.5
+        assert client.enable_throttling is False
+        assert client.throttle_delay_range == (0.2, 0.5)
 
     @pytest.mark.asyncio
     async def test_default_headers_include_browser_like_fields(self):
@@ -61,6 +66,33 @@ class TestAsyncHttpClient:
         assert headers["Referer"].startswith("https://athena.ohdsi.org/")
         assert "Accept-Language" in headers
         assert "User-Agent" in headers
+
+    @pytest.mark.asyncio
+    async def test_throttle_request_enabled(self):
+        client = AsyncHttpClient(
+            enable_throttling=True, throttle_delay_range=(0.1, 0.2)
+        )
+
+        with patch(
+            "athena_client.async_client.random.uniform", return_value=0.15
+        ) as mock_uniform:
+            with patch(
+                "athena_client.async_client.asyncio.sleep",
+                new_callable=AsyncMock,
+            ) as mock_sleep:
+                await client._throttle_request()
+                mock_uniform.assert_called_once_with(0.1, 0.2)
+                mock_sleep.assert_awaited_once_with(0.15)
+
+    @pytest.mark.asyncio
+    async def test_throttle_request_disabled(self):
+        client = AsyncHttpClient(enable_throttling=False)
+
+        with patch(
+            "athena_client.async_client.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep:
+            await client._throttle_request()
+            mock_sleep.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_build_url(self):
@@ -720,3 +752,32 @@ class TestAthenaAsyncClient:
                 mock_get_timeout.assert_called_once()
                 # Verify search_concepts was called with the calculated timeout
                 assert mock_search.call_args[1]["timeout"] == 123
+
+    @pytest.mark.asyncio
+    async def test_search_handles_query_dsl(self):
+        client = AthenaAsyncClient()
+        query = Q.term("diabetes") & Q.term("type 2")
+        mock_response = {
+            "content": [],
+            "totalElements": 0,
+            "totalPages": 0,
+            "pageable": {},
+            "last": True,
+        }
+
+        with patch(
+            "athena_client.utils.estimate_query_size", return_value=1
+        ) as mock_estimate:
+            with patch(
+                "athena_client.utils.get_operation_timeout", return_value=5
+            ):
+                with patch.object(
+                    client,
+                    "search_concepts",
+                    new_callable=AsyncMock,
+                    return_value=mock_response,
+                ) as mock_search:
+                    await client.search(query)
+
+                    assert isinstance(mock_estimate.call_args[0][0], str)
+                    assert mock_search.call_args[1]["query"] == str(query)

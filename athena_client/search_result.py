@@ -5,6 +5,7 @@ This module provides a wrapper around search results that provides
 convenient access to the data in various formats.
 """
 
+import asyncio
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional
 
 try:
@@ -107,30 +108,29 @@ class SearchResult:
         if current_page is None or size is None:
             return None
             
-        import inspect
-        # Robust check for async client: if it's an AthenaAsyncClient or search is a coroutine function
-        # We check both for robustness against wrapping/patching
-        if (
-            hasattr(self._client, "search") and 
-            (inspect.iscoroutinefunction(self._client.search) or 
-             self._client.__class__.__name__ == "AthenaAsyncClient")
-        ):
-            raise RuntimeError(
-                "Cannot use sync next_page() with an async client. "
-                "Use 'await results.anext_page()' instead."
-            )
-            
         # Clean kwargs to avoid "multiple values for argument" error
         search_kwargs = self._kwargs.copy()
         for key in ["page", "size", "pageSize", "page_size", "limit", "start"]:
             search_kwargs.pop(key, None)
-            
-        return self._client.search(
+
+        result = self._client.search(
             query=self._query or "",
             page=current_page + 1,
             size=size,
             **search_kwargs,
         )
+        if asyncio.iscoroutine(result):
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                return asyncio.run(result)
+            result.close()
+            raise RuntimeError(
+                "Cannot use sync next_page() with an async client while an event "
+                "loop is running. Use 'await results.anext_page()' instead."
+            )
+
+        return result
 
     async def anext_page(self) -> Optional["SearchResult"]:
         """Get the next page of results asynchronously.
@@ -170,28 +170,29 @@ class SearchResult:
         if current_page is None or size is None:
             return None
             
-        import inspect
-        if (
-            hasattr(self._client, "search") and 
-            (inspect.iscoroutinefunction(self._client.search) or 
-             self._client.__class__.__name__ == "AthenaAsyncClient")
-        ):
-            raise RuntimeError(
-                "Cannot use sync previous_page() with an async client. "
-                "Use 'await results.aprevious_page()' instead."
-            )
-            
         # Clean kwargs to avoid "multiple values for argument" error
         search_kwargs = self._kwargs.copy()
         for key in ["page", "size", "pageSize", "page_size", "limit", "start"]:
             search_kwargs.pop(key, None)
-            
-        return self._client.search(
+
+        result = self._client.search(
             query=self._query or "",
             page=current_page - 1,
             size=size,
             **search_kwargs,
         )
+        if asyncio.iscoroutine(result):
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                return asyncio.run(result)
+            result.close()
+            raise RuntimeError(
+                "Cannot use sync previous_page() with an async client while an event "
+                "loop is running. Use 'await results.aprevious_page()' instead."
+            )
+
+        return result
 
     async def aprevious_page(self) -> Optional["SearchResult"]:
         """Get the previous page of results asynchronously.

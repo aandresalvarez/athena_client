@@ -1,6 +1,5 @@
 """Tests for the enhanced HttpClient class."""
 
-import json
 from unittest.mock import Mock, patch
 from urllib.parse import urljoin
 
@@ -238,7 +237,7 @@ class TestHttpClient:
         client = HttpClient()
         response = Mock()
         response.status_code = 200
-        response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+        response.content = b"invalid json"
         response.text = "invalid json"
 
         with pytest.raises(ValidationError) as exc_info:

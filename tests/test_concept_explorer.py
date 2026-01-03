@@ -118,12 +118,10 @@ class TestExplorationState:
 
         assert state.queue is not None
         assert state.visited_ids is not None
-        assert state.cache is not None
         assert state.results is not None
 
         assert len(state.queue) == 0
         assert len(state.visited_ids) == 0
-        assert len(state.cache) == 0
         assert "direct_matches" in state.results
         assert "synonym_matches" in state.results
         assert "relationship_matches" in state.results
@@ -136,16 +134,14 @@ class TestExplorationState:
 
         queue = deque([(Mock(), 0, [1])])
         visited_ids = {1, 2}
-        cache = {1: Mock()}
         results = {"test": "value"}
 
         state = ExplorationState(
-            queue=queue, visited_ids=visited_ids, cache=cache, results=results
+            queue=queue, visited_ids=visited_ids, results=results
         )
 
         assert state.queue == queue
         assert state.visited_ids == visited_ids
-        assert state.cache == cache
         assert state.results == results
 
 

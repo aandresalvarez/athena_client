@@ -371,8 +371,8 @@ athena search "aspirin" --output csv
 # Pretty table (default)
 athena search "aspirin" --output pretty
 
-# Export to file
-athena search "aspirin" --output json | tail -n +2 > aspirin.json
+# Export to file (stderr kept clean for JSON/YAML/CSV)
+athena search "aspirin" --output json > aspirin.json
 ```
 
 ---
@@ -509,12 +509,12 @@ You can export CLI search results to various formats:
 ```bash
 # For YAML support: pip install "athena-client[yaml]"
 
-athena search "aspirin" --output json | tail -n +2 > aspirin_concepts.json
-athena search "aspirin" --output yaml | tail -n +2 > aspirin_concepts.yaml
-athena search "aspirin" --output csv  | tail -n +2 > aspirin_concepts.csv
+athena search "aspirin" --output json > aspirin_concepts.json
+athena search "aspirin" --output yaml > aspirin_concepts.yaml
+athena search "aspirin" --output csv  > aspirin_concepts.csv
 ```
 
-> **Note:** The `tail -n +2` removes warning lines (such as large query warnings) to ensure the output file is valid for the chosen format.
+> **Note:** Progress and warning messages are printed to stderr, so stdout stays clean for piping.
 
 ---
 
@@ -554,4 +554,3 @@ python examples/example_name.py
 - **🔧 [Contributing Guide](https://github.com/aandresalvarez/athena_client/blob/main/CONTRIBUTING.md)** - How to contribute to the project
 - **🗺️ [Roadmap](https://github.com/aandresalvarez/athena_client/blob/main/ROADMAP.md)** - Planned features and enhancements
 - **📦 [Lightweight Installation Guide](https://github.com/aandresalvarez/athena_client/blob/main/LIGHTWEIGHT_INSTALLATION.md)** - Detailed dependency management
-

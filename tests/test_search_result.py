@@ -2,7 +2,7 @@
 Tests for SearchResult class and pagination functionality.
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -249,6 +249,20 @@ class TestSearchResult:
         assert result == mock_next_result
         self.mock_client.search.assert_called_once_with(query="", page=1, size=20)
 
+    def test_next_page_async_client_sync_context(self):
+        """Test next_page using async client from sync context."""
+        self.mock_response.last = False
+        self.mock_response.number = 0
+        self.mock_response.size = 20
+
+        async_client = Mock()
+        async_client.search = AsyncMock(return_value=Mock())
+
+        result = SearchResult(self.mock_response, async_client).next_page()
+
+        assert result is async_client.search.return_value
+        async_client.search.assert_awaited_once_with(query="", page=1, size=20)
+
     def test_next_page_with_none_values(self):
         """Test next_page when number or size is None."""
         self.mock_response.last = False
@@ -279,6 +293,20 @@ class TestSearchResult:
 
         assert result == mock_prev_result
         self.mock_client.search.assert_called_once_with(query="", page=0, size=20)
+
+    def test_previous_page_async_client_sync_context(self):
+        """Test previous_page using async client from sync context."""
+        self.mock_response.first = False
+        self.mock_response.number = 1
+        self.mock_response.size = 20
+
+        async_client = Mock()
+        async_client.search = AsyncMock(return_value=Mock())
+
+        result = SearchResult(self.mock_response, async_client).previous_page()
+
+        assert result is async_client.search.return_value
+        async_client.search.assert_awaited_once_with(query="", page=0, size=20)
 
     def test_previous_page_with_none_values(self):
         """Test previous_page when number or size is None."""
