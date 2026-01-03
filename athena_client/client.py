@@ -333,10 +333,12 @@ class AthenaClient:
             clear, actionable messages without requiring try-catch blocks.
         """
         max_attempts = 3 if auto_retry else 1
+        from .utils import get_operation_timeout
+        operation_timeout = get_operation_timeout("details", 1)
 
         for attempt in range(max_attempts):
             try:
-                response = self.http.get(f"/concepts/{concept_id}")
+                response = self.http.get(f"/concepts/{concept_id}", timeout=operation_timeout)
 
                 # Check if the response is an error response
                 if (
@@ -413,10 +415,12 @@ class AthenaClient:
             clear, actionable messages without requiring try-catch blocks.
         """
         max_attempts = 3 if auto_retry else 1
+        from .utils import get_operation_timeout
+        operation_timeout = get_operation_timeout("relationships", 1)
 
         for attempt in range(max_attempts):
             try:
-                response = self.http.get(f"/concepts/{concept_id}/relationships")
+                response = self.http.get(f"/concepts/{concept_id}/relationships", timeout=operation_timeout)
 
                 # Check if the response is an error response
                 if (

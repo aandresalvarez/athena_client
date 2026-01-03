@@ -108,10 +108,16 @@ class SearchResult:
             return None
             
         import inspect
-        if inspect.iscoroutinefunction(self._client.search):
+        # Robust check for async client: if it's an AthenaAsyncClient or search is a coroutine function
+        # We check both for robustness against wrapping/patching
+        if (
+            hasattr(self._client, "search") and 
+            (inspect.iscoroutinefunction(self._client.search) or 
+             self._client.__class__.__name__ == "AthenaAsyncClient")
+        ):
             raise RuntimeError(
                 "Cannot use sync next_page() with an async client. "
-                "Use await anext_page() instead."
+                "Use 'await results.anext_page()' instead."
             )
             
         # Clean kwargs to avoid "multiple values for argument" error
@@ -167,10 +173,14 @@ class SearchResult:
             return None
             
         import inspect
-        if inspect.iscoroutinefunction(self._client.search):
+        if (
+            hasattr(self._client, "search") and 
+            (inspect.iscoroutinefunction(self._client.search) or 
+             self._client.__class__.__name__ == "AthenaAsyncClient")
+        ):
             raise RuntimeError(
                 "Cannot use sync previous_page() with an async client. "
-                "Use await aprevious_page() instead."
+                "Use 'await results.aprevious_page()' instead."
             )
             
         # Clean kwargs to avoid "multiple values for argument" error

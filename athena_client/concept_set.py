@@ -116,6 +116,19 @@ class ConceptSetGenerator:
                             seed_concepts=validated_ids,
                             warnings=[warning],
                         )
+                    elif all_mapped_standard_ids:
+                        # Standard IDs were found via mapping but failed local validation
+                        logger.warning(
+                            "Mapping found standard IDs %s but none were valid in local DB.",
+                            all_mapped_standard_ids[:10],
+                        )
+                        return self._build_failure_response(
+                            query,
+                            (
+                                f"Standard concepts {all_mapped_standard_ids[:5]} found "
+                                "via mapping but are missing from the local database."
+                            ),
+                        )
 
             return self._build_failure_response(
                 query,

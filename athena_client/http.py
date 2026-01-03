@@ -27,7 +27,7 @@ from .exceptions import (
     ValidationError,
 )
 from .settings import get_settings
-from .utils.user_agents import USER_AGENTS
+from .utils.user_agents import USER_AGENTS, get_default_headers
 
 # Type variable for generic response
 T = TypeVar("T")
@@ -139,20 +139,7 @@ class HttpClient:
 
     def _setup_default_headers(self, user_agent_idx: int = 0) -> Dict[str, str]:
         """Set up default headers for all requests, with optional User-Agent index."""
-        # DO NOT include Content-Type in default headers - add it only for POST/PUT requests
-        # Add browser-like security headers that modern browsers send
-        default_headers = {
-            "Accept": "application/json, text/plain, */*",  # Modern, simple Accept header
-            "User-Agent": self._USER_AGENTS[user_agent_idx],
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://athena.ohdsi.org/search-terms/terms",  # More realistic referer
-            "Origin": "https://athena.ohdsi.org",  # Origin header for CORS
-            "Sec-Fetch-Site": "same-origin",  # Browser security header
-            "Sec-Fetch-Mode": "cors",  # Browser security header
-            "Sec-Fetch-Dest": "empty",  # Browser security header
-            "Connection": "keep-alive",
-        }
-        return default_headers
+        return get_default_headers(user_agent_idx=user_agent_idx)
 
     def _throttle_request(self) -> None:
         """

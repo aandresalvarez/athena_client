@@ -766,7 +766,8 @@ class TestAthenaClient:
         assert isinstance(result, ConceptDetails)
         assert result.id == 1
         assert result.name == "Test Concept"
-        mock_http_client.get.assert_called_once_with("/concepts/1")
+        # Verify call with default dynamic timeout (30s)
+        mock_http_client.get.assert_called_once_with("/concepts/1", timeout=30)
 
     @patch("athena_client.client.HttpClient")
     def test_details_api_error_concept_not_found(self, mock_http_client_class):
@@ -882,7 +883,8 @@ class TestAthenaClient:
 
         assert isinstance(result, ConceptRelationship)
         assert result.count == 1
-        mock_http_client.get.assert_called_once_with("/concepts/1/relationships")
+        # Verify call with default dynamic timeout (45s)
+        mock_http_client.get.assert_called_once_with("/concepts/1/relationships", timeout=45)
 
     @patch("athena_client.client.HttpClient")
     def test_relationships_api_error_concept_not_found(self, mock_http_client_class):

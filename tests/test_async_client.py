@@ -627,6 +627,16 @@ class TestAthenaAsyncClient:
         resp_200.json.return_value = {"ok": True}
         resp_200.reason_phrase = "OK"
         
+        # Mock the method that constructs headers
+        def mock_setup_headers(user_agent_idx=0):
+            return {
+                "User-Agent": f"UA{user_agent_idx + 1}",
+                "Origin": "https://athena.ohdsi.org",
+                "Sec-Fetch-Site": "same-origin",
+            }
+        
+        client._setup_default_headers = mock_setup_headers
+        
         with patch.object(client, "_USER_AGENTS", ["UA1", "UA2"]):
             with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
                 # We want to simulate Request 1 and Request 2 happening concurrently.
