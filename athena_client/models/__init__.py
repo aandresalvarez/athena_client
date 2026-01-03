@@ -4,12 +4,15 @@ Pydantic models for Athena API responses.
 This module defines Pydantic models for the various responses from the Athena API.
 """
 
+import logging
 from enum import Enum
 from typing import Any, ClassVar, Dict, List, Optional, Union, cast
 
 import orjson
 from pydantic import BaseModel as PydanticBaseModel
 from pydantic import ConfigDict, Field, model_validator
+
+logger = logging.getLogger(__name__)
 
 
 def _json_dumps(value: Any, *, default: Any) -> str:
@@ -67,6 +70,76 @@ class ConceptType(str, Enum):
     STANDARD = "Standard"
     CLASSIFICATION = "Classification"
     NON_STANDARD = "Non-standard"
+    UNKNOWN = "Unknown"
+
+    @classmethod
+    def _missing_(cls, value: object) -> "ConceptType":
+        """Handle shorthand values from the API (S, C)."""
+        if not isinstance(value, str):
+            return cls.UNKNOWN
+            
+        mapping = {
+            "S": cls.STANDARD,
+            "C": cls.CLASSIFICATION,
+            "N": cls.NON_STANDARD,
+            # Handle cases where API returns lowercase or other variants
+            "standard": cls.STANDARD,
+            "classification": cls.CLASSIFICATION,
+            "non-standard": cls.NON_STANDARD,
+        }
+        val = value.strip()
+        result = mapping.get(val.upper())
+        
+        if result is None and val:
+            logger.warning(f"Unrecognized ConceptType shorthand: '{val}'. Mapping to UNKNOWN.")
+            return cls.UNKNOWN
+            
+        return result or cls.UNKNOWN
+
+class InvalidReason(str, Enum):
+    """Reason why a concept is invalid."""
+
+    UPDATED = "U"
+    DELETED = "D"
+    VALID = "V"  # Sometimes 'V' is used, though usually null
+    INVALID = "Invalid"
+    UNKNOWN = "Unknown"
+
+    @classmethod
+    def _missing_(cls, value: object) -> "InvalidReason":
+        """Handle various shorthand or null values."""
+        if value is None or value == "":
+            return cls.VALID  # Default to VALID if null or empty
+        if not isinstance(value, str):
+            return cls.UNKNOWN
+            
+        val = value.strip()
+        val_upper = val.upper()
+        
+        if val_upper == "U":
+            return cls.UPDATED
+        if val_upper == "D":
+            return cls.DELETED
+        if val_upper == "V":
+            return cls.VALID
+        if val.lower() == "invalid":
+            return cls.INVALID
+        
+        # Handle full names if they appear
+        mapping = {
+            "UPDATED": cls.UPDATED,
+            "DELETED": cls.DELETED,
+            "VALID": cls.VALID,
+            "INVALID": cls.INVALID,
+        }
+        result = mapping.get(val_upper)
+        
+        if result is None and val:
+            logger.warning(f"Unrecognized InvalidReason shorthand: '{val}'. Mapping to UNKNOWN.")
+            return cls.UNKNOWN
+            
+        return result or cls.UNKNOWN
+
 
 
 class Concept(BaseModel):
@@ -81,7 +154,7 @@ class Concept(BaseModel):
         None, description="Standard concept flag"
     )
     code: str = Field(..., description="Concept code")
-    invalidReason: Optional[str] = Field(None, description="Invalid reason")
+    invalidReason: Optional[InvalidReason] = Field(None, description="Invalid reason")
     score: Optional[float] = Field(None, description="Search score")
 
 
@@ -116,7 +189,7 @@ class ConceptDetails(BaseModel):
         None, description="Standard concept flag"
     )
     conceptCode: str = Field(..., description="Concept code")
-    invalidReason: Optional[str] = Field(None, description="Invalid reason")
+    invalidReason: Optional[InvalidReason] = Field(None, description="Invalid reason")
     validStart: str = Field(..., description="Valid start date")
     validEnd: str = Field(..., description="Valid end date")
     synonyms: Optional[List[Union[str, Dict[str, Any]]]] = Field(
@@ -233,6 +306,7 @@ __all__ = [
     "ConceptRelationship",
     "ConceptSearchResponse",
     "ConceptType",
+    "InvalidReason",
     "Domain",
     "GraphLink",
     "GraphTerm",

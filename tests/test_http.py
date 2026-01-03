@@ -1,9 +1,9 @@
 """Tests for the enhanced HttpClient class."""
 
-import json
 from unittest.mock import Mock, patch
 from urllib.parse import urljoin
 
+import orjson
 import pytest
 import requests
 from requests.exceptions import ConnectionError, Timeout
@@ -72,8 +72,8 @@ class TestHttpClient:
     def test_setup_default_headers(self):
         """Test default headers setup."""
         client = HttpClient()
-        headers = client.session.headers
-
+        headers = client._setup_default_headers()
+    
         assert headers["Accept"] == "application/json, text/plain, */*"
         assert "Content-Type" not in headers  # Should not be in default headers
         assert headers["Origin"] == "https://athena.ohdsi.org"
@@ -154,7 +154,7 @@ class TestHttpClient:
         client = HttpClient()
         response = Mock()
         response.status_code = 200
-        response.json.return_value = {"result": "success"}
+        response.content = orjson.dumps({"result": "success"})
         response.text = "success response"
 
         result = client._handle_response(response, "https://api.example.com/test")
@@ -237,7 +237,7 @@ class TestHttpClient:
         client = HttpClient()
         response = Mock()
         response.status_code = 200
-        response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
+        response.content = b"invalid json"
         response.text = "invalid json"
 
         with pytest.raises(ValidationError) as exc_info:
@@ -253,7 +253,7 @@ class TestHttpClient:
         client = HttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
         mock_response.text = "success response"
         mock_response.reason = "OK"
 
@@ -269,7 +269,7 @@ class TestHttpClient:
         client = HttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
         mock_response.text = "success response"
         mock_response.reason = "OK"
 
@@ -289,7 +289,7 @@ class TestHttpClient:
         client = HttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
         mock_response.text = "success response"
         mock_response.reason = "OK"
 
@@ -299,7 +299,7 @@ class TestHttpClient:
             client.request("POST", "/test", data={"key": "value"})
             mock_request.assert_called_once()
             call_args = mock_request.call_args
-            assert call_args[1]["data"] == b'{"key": "value"}'
+            assert call_args[1]["data"] == b'{"key":"value"}'
 
     @patch("athena_client.http.build_headers")
     def test_request_includes_security_headers(
@@ -312,7 +312,7 @@ class TestHttpClient:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
         mock_response.text = "success response"
         mock_response.reason = "OK"
 
@@ -338,7 +338,7 @@ class TestHttpClient:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
         mock_response.text = "success response"
         mock_response.reason = "OK"
 
@@ -366,7 +366,7 @@ class TestHttpClient:
         second_response = Mock()
         second_response.status_code = 200
         second_response.headers = {"Content-Type": "application/json"}
-        second_response.json.return_value = {"result": "success"}
+        second_response.content = orjson.dumps({"result": "success"})
         second_response.text = "ok"
         second_response.reason = "OK"
 
@@ -379,7 +379,9 @@ class TestHttpClient:
                 result = client.request("GET", "/test")
                 assert result == {"result": "success"}
                 assert mock_request.call_count == 2
+                first_headers = mock_request.call_args_list[0][1]["headers"]
                 retry_headers = mock_request.call_args_list[1][1]["headers"]
+                assert first_headers["User-Agent"] != retry_headers["User-Agent"]
                 assert retry_headers["Origin"] == "https://athena.ohdsi.org"
                 assert retry_headers["Sec-Fetch-Site"] == "same-origin"
                 assert "Content-Type" not in retry_headers
@@ -393,15 +395,15 @@ class TestHttpClient:
 
         client = HttpClient()
         first_response = Mock()
-        first_response.status_code = 200
+        first_response.status_code = 403
         first_response.headers = {"Content-Type": "text/html"}
         first_response.text = "blocked"
-        first_response.reason = "OK"
+        first_response.reason = "Forbidden"
 
         second_response = Mock()
         second_response.status_code = 200
         second_response.headers = {"Content-Type": "application/json"}
-        second_response.json.return_value = {"result": "success"}
+        second_response.content = orjson.dumps({"result": "success"})
         second_response.text = "ok"
         second_response.reason = "OK"
 

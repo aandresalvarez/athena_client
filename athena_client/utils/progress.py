@@ -43,7 +43,9 @@ class ProgressTracker:
         """Start tracking progress."""
         self.start_time = time.time()
         if self.show_progress:
-            self._print_progress()
+            progress_str = self._get_progress_string()
+            if progress_str:
+                print(progress_str, end="", flush=True)
 
     def update(self, increment: int = 1) -> None:
         """
@@ -52,6 +54,7 @@ class ProgressTracker:
         Args:
             increment: Number of items completed
         """
+        progress_str = None
         with self._lock:
             self.current += increment
             current_time = time.time()
@@ -61,20 +64,28 @@ class ProgressTracker:
                 self.show_progress
                 and current_time - self.last_update_time >= self.update_interval
             ):
-                self._print_progress()
+                progress_str = self._get_progress_string()
                 self.last_update_time = current_time
+
+        if progress_str:
+            print(progress_str, end="", flush=True)
 
     def complete(self) -> None:
         """Mark the operation as complete."""
-        self.current = self.total
-        if self.show_progress:
-            self._print_progress()
-            print(f"✅ {self.description} completed!")
+        progress_str = None
+        with self._lock:
+            self.current = self.total
+            if self.show_progress:
+                progress_str = self._get_progress_string()
 
-    def _print_progress(self) -> None:
-        """Print the current progress."""
+        if progress_str:
+            print(progress_str, end="", flush=True)
+            print(f"\n✅ {self.description} completed!")
+
+    def _get_progress_string(self) -> Optional[str]:
+        """Calculate the current progress string."""
         if self.total == 0:
-            return
+            return None
 
         percentage = (self.current / self.total) * 100
         elapsed = time.time() - self.start_time if self.start_time else 0
@@ -95,11 +106,9 @@ class ProgressTracker:
         elapsed_str = self._format_time(elapsed)
         eta_str = f" (ETA: {self._format_time(eta)})" if eta else ""
 
-        print(
+        return (
             f"\r{self.description}: [{bar}] {percentage:.1f}% "
-            f"({self.current}/{self.total}) {elapsed_str}{eta_str}",
-            end="",
-            flush=True,
+            f"({self.current}/{self.total}) {elapsed_str}{eta_str}"
         )
 
     def _format_time(self, seconds: Optional[float]) -> str:

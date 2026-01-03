@@ -385,7 +385,7 @@ class TestErrorScenarios:
         # Mock the existing http client instance's get method
         athena_client.http.get = Mock(return_value=error_response)
 
-        with pytest.raises(APIError) as exc_info:
+        with pytest.raises(RetryFailedError) as exc_info:
             athena_client.search("test", max_retries=0)
 
         assert "Rate limit exceeded" in str(exc_info.value)
@@ -766,7 +766,8 @@ class TestAthenaClient:
         assert isinstance(result, ConceptDetails)
         assert result.id == 1
         assert result.name == "Test Concept"
-        mock_http_client.get.assert_called_once_with("/concepts/1")
+        # Verify call with default dynamic timeout (30s)
+        mock_http_client.get.assert_called_once_with("/concepts/1", timeout=30)
 
     @patch("athena_client.client.HttpClient")
     def test_details_api_error_concept_not_found(self, mock_http_client_class):
@@ -882,7 +883,8 @@ class TestAthenaClient:
 
         assert isinstance(result, ConceptRelationship)
         assert result.count == 1
-        mock_http_client.get.assert_called_once_with("/concepts/1/relationships")
+        # Verify call with default dynamic timeout (45s)
+        mock_http_client.get.assert_called_once_with("/concepts/1/relationships", timeout=45)
 
     @patch("athena_client.client.HttpClient")
     def test_relationships_api_error_concept_not_found(self, mock_http_client_class):
@@ -1348,43 +1350,113 @@ class TestDatabaseIntegration:
         with pytest.raises(RuntimeError):
             client.validate_local_concepts([1])
 
+    @pytest.mark.asyncio
     @patch("athena_client.db.sqlalchemy_connector.SQLAlchemyConnector")
-    @patch("athena_client.client.AthenaAsyncClient")
-    def test_generate_concept_set_facade(
+    async def test_generate_concept_set_facade(
         self,
-        mock_async_client_class: Mock,
         mock_connector_class: Mock,
     ) -> None:
         expected = {"concept_ids": [1], "metadata": {"status": "SUCCESS"}}
 
-        mock_async_client = Mock()
-        mock_async_client.generate_concept_set = AsyncMock(return_value=expected)
-        mock_async_client.set_database_connector = Mock()
-        mock_async_client_class.return_value = mock_async_client
-
         mock_connector = Mock()
         mock_connector_class.from_connection_string.return_value = mock_connector
 
-        client = AthenaClient()
+        from athena_client.async_client import AthenaAsyncClient
 
-        result = asyncio.run(
-            client.generate_concept_set(
+        created_clients = []
+        original_init = AthenaAsyncClient.__init__
+
+        def _tracking_init(self, *args: object, **kwargs: object) -> None:
+            original_init(self, *args, **kwargs)
+            created_clients.append(self)
+
+        client = AthenaClient()
+        with (
+            patch.object(AthenaAsyncClient, "__init__", _tracking_init),
+            patch.object(
+                AthenaAsyncClient,
+                "generate_concept_set",
+                new=AsyncMock(return_value=expected),
+            ) as mock_generate_concept_set,
+        ):
+            result = await client.generate_concept_set_async(
                 "test", "sqlite:///db", strategy="strict", include_descendants=False
             )
-        )
 
-        mock_async_client_class.assert_called_once_with(
-            base_url=client.http.base_url,
-            token=str(client.http.session.headers.get("Authorization", "")),
-        )
         mock_connector_class.from_connection_string.assert_called_once_with(
             "sqlite:///db"
         )
-        mock_async_client.set_database_connector.assert_called_once_with(mock_connector)
-        mock_async_client.generate_concept_set.assert_awaited_once_with(
+        assert created_clients
+        async_client = created_clients[0]
+        assert async_client.db_connector is mock_connector
+        mock_generate_concept_set.assert_awaited_once_with(
             "test",
             strategy="strict",
             include_descendants=False,
             confidence_threshold=0.7,
         )
         assert result == expected
+
+    def test_search_with_boosts_uses_post(self, athena_client):
+        """
+        Regression test: search with boosts should use POST instead of GET.
+        """
+        mock_response = {
+            "content": [],
+            "pageable": {},
+            "totalElements": 0,
+            "last": True,
+            "totalPages": 1,
+            "first": True,
+            "size": 20,
+            "number": 0,
+            "numberOfElements": 0,
+            "empty": True,
+        }
+        athena_client.http.post.return_value = mock_response
+        
+        boosts = {"conceptName": 3.0}
+        athena_client.search("test", boosts=boosts)
+        
+        # Verify POST was called instead of GET
+        athena_client.http.post.assert_called_once()
+        athena_client.http.get.assert_not_called()
+        
+        # Verify POST was called with boosts in data
+        args, kwargs = athena_client.http.post.call_args
+        assert kwargs["data"] == {"boosts": boosts}
+
+    def test_generate_concept_set_nested_loop_regression(self, athena_client):
+        """
+        Regression test: generate_concept_set should not crash when 
+        called from within an existing event loop.
+        """
+        expected = {"concept_ids": [1], "metadata": {"status": "SUCCESS"}}
+        
+        # We need to mock the async client and connector since we're testing the sync wrapper
+        with patch("athena_client.async_client.AthenaAsyncClient") as mock_async_client_class:
+            mock_async_client = Mock()
+            mock_async_client.generate_concept_set = AsyncMock(return_value=expected)
+            mock_async_client.set_database_connector = Mock()
+            mock_async_client.__aenter__ = AsyncMock(return_value=mock_async_client)
+            mock_async_client.__aexit__ = AsyncMock(return_value=None)
+            mock_async_client_class.return_value = mock_async_client
+            
+            with patch("athena_client.db.sqlalchemy_connector.SQLAlchemyConnector") as mock_connector_class:
+                mock_connector = Mock()
+                mock_connector_class.from_connection_string.return_value = mock_connector
+                
+                # Run the sync method within a separate thread that starts its own loop,
+                # or more simply, just mock loop.is_running() to True.
+                
+                import asyncio
+                loop = asyncio.new_event_loop()
+                try:
+                    # Manually set the loop as running
+                    with patch("asyncio.get_event_loop", return_value=loop):
+                        with patch.object(loop, "is_running", return_value=True):
+                            # This should NOT raise RuntimeError: asyncio.run() cannot be called...
+                            result = athena_client.generate_concept_set("test", "sqlite://")
+                            assert result == expected
+                finally:
+                    loop.close()

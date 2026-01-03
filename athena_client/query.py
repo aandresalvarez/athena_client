@@ -5,7 +5,7 @@ This module provides a Query DSL that allows for building complex queries
 using a fluent interface and operator overloading.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class Q:
@@ -166,22 +166,57 @@ class Q:
         Returns:
             Dictionary with query boosts
         """
+        def _as_list(value: Any) -> list:
+            if value is None:
+                return []
+            if isinstance(value, list):
+                return value
+            return [value]
+
+        def _extract_mergeable_bool(
+            filter_dict: Dict[str, Any]
+        ) -> Optional[Dict[str, list]]:
+            bool_clause = filter_dict.get("bool")
+            if not isinstance(bool_clause, dict):
+                return None
+            if "should" in bool_clause or "minimum_should_match" in bool_clause:
+                return None
+            extra_keys = set(bool_clause.keys()) - {"must", "must_not"}
+            if extra_keys:
+                return None
+            return {
+                "must": _as_list(bool_clause.get("must")),
+                "must_not": _as_list(bool_clause.get("must_not")),
+            }
+
         if self.query_type == "compound":
             if self.operator == "AND":
                 assert self.left is not None and self.right is not None
                 boosts_left = self.left.to_boosts()
                 boosts_right = self.right.to_boosts()
-                # Merge the boosts with AND logic
-                return {
-                    "filter": {
-                        "bool": {
-                            "must": [
-                                boosts_left.get("filter", {}),
-                                boosts_right.get("filter", {}),
-                            ]
-                        }
-                    }
-                }
+                left_filter = boosts_left.get("filter", {})
+                right_filter = boosts_right.get("filter", {})
+
+                must: List[Dict[str, Any]] = []
+                must_not: List[Dict[str, Any]] = []
+
+                for filter_part in (left_filter, right_filter):
+                    if not filter_part:
+                        continue
+                    mergeable = _extract_mergeable_bool(filter_part)
+                    if mergeable is None:
+                        must.append(filter_part)
+                        continue
+                    must.extend(mergeable["must"])
+                    must_not.extend(mergeable["must_not"])
+
+                bool_filter: Dict[str, Any] = {}
+                if must:
+                    bool_filter["must"] = must
+                if must_not:
+                    bool_filter["must_not"] = must_not
+
+                return {"filter": {"bool": bool_filter}}
             elif self.operator == "OR":
                 assert self.left is not None and self.right is not None
                 boosts_left = self.left.to_boosts()
@@ -257,5 +292,13 @@ class Q:
             # Gracefully handle unknown operators by returning the raw value
             return self.value
         else:
-            # For basic query types, return the value
+            # For basic query types, return the formatted value
+            if self.query_type == "phrase":
+                # Ensure it's in quotes for string representation
+                val = self.value
+                if not val.startswith('"') or not val.endswith('"'):
+                    val = f'"{val}"'
+                return val
+            # For term, exact, wildcard, we use the value as is 
+            # (exact and wildcard already add quotes/patterns in their classmethods)
             return self.value

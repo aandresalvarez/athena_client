@@ -5,6 +5,7 @@ This module provides a wrapper around search results that provides
 convenient access to the data in various formats.
 """
 
+import asyncio
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional
 
 try:
@@ -24,15 +25,25 @@ if TYPE_CHECKING:
 class SearchResult:
     """Wrapper for search results that provides convenient access methods."""
 
-    def __init__(self, response: ConceptSearchResponse, client: Any) -> None:
+    def __init__(
+        self,
+        response: ConceptSearchResponse,
+        client: Any,
+        query: Optional[str] = None,
+        **kwargs: Any,
+    ) -> None:
         """Initialize the search result wrapper.
 
         Args:
             response: The search response from the API
             client: The client instance for making additional requests
+            query: The original search query
+            **kwargs: Original search parameters
         """
         self._response = response
         self._client = client
+        self._query = query
+        self._kwargs = kwargs
 
     def all(self) -> List[Concept]:
         """Get all concepts from the current page.
@@ -96,10 +107,54 @@ class SearchResult:
         size = self._response.size
         if current_page is None or size is None:
             return None
-        return self._client.search(
-            query="",  # This would need to be the original query
+            
+        # Clean kwargs to avoid "multiple values for argument" error
+        search_kwargs = self._kwargs.copy()
+        for key in ["page", "size", "pageSize", "page_size", "limit", "start"]:
+            search_kwargs.pop(key, None)
+
+        result = self._client.search(
+            query=self._query or "",
             page=current_page + 1,
             size=size,
+            **search_kwargs,
+        )
+        if asyncio.iscoroutine(result):
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                return asyncio.run(result)
+            result.close()
+            raise RuntimeError(
+                "Cannot use sync next_page() with an async client while an event "
+                "loop is running. Use 'await results.anext_page()' instead."
+            )
+
+        return result
+
+    async def anext_page(self) -> Optional["SearchResult"]:
+        """Get the next page of results asynchronously.
+
+        Returns:
+            SearchResult for the next page, or None if no more pages
+        """
+        if self._response.last:
+            return None
+        current_page = self._response.number
+        size = self._response.size
+        if current_page is None or size is None:
+            return None
+            
+        # Clean kwargs to avoid "multiple values for argument" error
+        search_kwargs = self._kwargs.copy()
+        for key in ["page", "size", "pageSize", "page_size", "limit", "start"]:
+            search_kwargs.pop(key, None)
+            
+        return await self._client.search(
+            query=self._query or "",
+            page=current_page + 1,
+            size=size,
+            **search_kwargs,
         )
 
     def previous_page(self) -> Optional["SearchResult"]:
@@ -114,10 +169,54 @@ class SearchResult:
         size = self._response.size
         if current_page is None or size is None:
             return None
-        return self._client.search(
-            query="",  # This would need to be the original query
+            
+        # Clean kwargs to avoid "multiple values for argument" error
+        search_kwargs = self._kwargs.copy()
+        for key in ["page", "size", "pageSize", "page_size", "limit", "start"]:
+            search_kwargs.pop(key, None)
+
+        result = self._client.search(
+            query=self._query or "",
             page=current_page - 1,
             size=size,
+            **search_kwargs,
+        )
+        if asyncio.iscoroutine(result):
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                return asyncio.run(result)
+            result.close()
+            raise RuntimeError(
+                "Cannot use sync previous_page() with an async client while an event "
+                "loop is running. Use 'await results.aprevious_page()' instead."
+            )
+
+        return result
+
+    async def aprevious_page(self) -> Optional["SearchResult"]:
+        """Get the previous page of results asynchronously.
+
+        Returns:
+            SearchResult for the previous page, or None if no previous pages
+        """
+        if self._response.first:
+            return None
+        current_page = self._response.number
+        size = self._response.size
+        if current_page is None or size is None:
+            return None
+            
+        # Clean kwargs to avoid "multiple values for argument" error
+        search_kwargs = self._kwargs.copy()
+        for key in ["page", "size", "pageSize", "page_size", "limit", "start"]:
+            search_kwargs.pop(key, None)
+            
+        return await self._client.search(
+            query=self._query or "",
+            page=current_page - 1,
+            size=size,
+            **search_kwargs,
         )
 
     @property

@@ -5,12 +5,12 @@ This module provides HTTP clients for making requests to the Athena API,
 with features like retry, backoff, and timeout handling.
 """
 
-import json
 import logging
 import random
 import time
 from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
+import orjson
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -26,6 +26,7 @@ from .exceptions import (
     ValidationError,
 )
 from .settings import get_settings
+from .utils.user_agents import USER_AGENTS, get_default_headers
 
 # Type variable for generic response
 T = TypeVar("T")
@@ -96,9 +97,6 @@ class HttpClient:
         # Create session with retry configuration
         self.session = self._create_session()
 
-        # Set up default headers
-        self._setup_default_headers()
-
         logger.debug("HttpClient initialized with base URL: %s", self.base_url)
 
     def _create_session(self) -> requests.Session:
@@ -135,48 +133,12 @@ class HttpClient:
 
         return session
 
-    # List of browser-like User-Agents for fallback (updated to 2025 versions)
-    _USER_AGENTS = [
-        (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        (
-            "Mozilla/5.0 (X11; Linux x86_64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15"
-        ),
-        (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) "
-            "Gecko/20100101 Firefox/133.0"
-        ),
-    ]
+    # Use centralized User-Agents (kept as class attribute for easier testing/mocking)
+    _USER_AGENTS = USER_AGENTS
 
-    def _setup_default_headers(self, user_agent_idx: int = 0) -> None:
+    def _setup_default_headers(self, user_agent_idx: int = 0) -> Dict[str, str]:
         """Set up default headers for all requests, with optional User-Agent index."""
-        # DO NOT include Content-Type in default headers - add it only for POST/PUT requests
-        # Add browser-like security headers that modern browsers send
-        default_headers = {
-            "Accept": "application/json, text/plain, */*",  # Modern, simple Accept header
-            "User-Agent": self._USER_AGENTS[user_agent_idx],
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://athena.ohdsi.org/search-terms/terms",  # More realistic referer
-            "Origin": "https://athena.ohdsi.org",  # Origin header for CORS
-            "Sec-Fetch-Site": "same-origin",  # Browser security header
-            "Sec-Fetch-Mode": "cors",  # Browser security header
-            "Sec-Fetch-Dest": "empty",  # Browser security header
-            "Connection": "keep-alive",
-        }
-        self.session.headers.clear()
-        self.session.headers.update(default_headers)
-        logger.debug("Default headers set: %s", default_headers)
+        return get_default_headers(user_agent_idx=user_agent_idx)
 
     def _throttle_request(self) -> None:
         """
@@ -228,27 +190,11 @@ class HttpClient:
 
     def _build_url(self, path: str) -> str:
         """
-        Build full URL by joining base URL and path.
-
-        Args:
-            path: API path
-
-        Returns:
-            Full URL
+        Build the full URL for an API endpoint.
         """
-        # Handle paths that start with / to ensure they're appended correctly
-        if path.startswith("/"):
-            # Remove the leading / and join with base_url
-            path = path[1:]
-
         # Ensure base_url doesn't end with / and path doesn't start with /
-        if self.base_url.endswith("/"):
-            base = self.base_url[:-1]
-        else:
-            base = self.base_url
-
-        if path.startswith("/"):
-            path = path[1:]
+        base = self.base_url.rstrip("/")
+        path = path.lstrip("/")
 
         full_url = f"{base}/{path}"
 
@@ -289,22 +235,26 @@ class HttpClient:
 
         Returns:
             Parsed JSON response
-
-        Raises:
-            ClientError: For 4xx status codes
-            ServerError: For 5xx status codes
-            NetworkError: For connection errors
-            APIError: For API-specific error responses
         """
         # Log raw response for debugging
         raw_response_text = response.text
         logger.debug(f"Raw response text from {url}: {raw_response_text[:1000]}...")
 
         try:
+            if response.status_code in (301, 302, 303, 307, 308):
+                location = response.headers.get("Location")
+                redirect_note = f" to {location}" if location else ""
+                msg = (
+                    f"Unexpected redirect ({response.status_code}){redirect_note} "
+                    f"when accessing {url}. Check the API base URL."
+                )
+                logger.error(msg)
+                raise NetworkError(msg, url=url)
+
             response.raise_for_status()
 
-            # Attempt to parse JSON after logging raw text
-            data = response.json()
+            # Attempt to parse JSON using orjson for better performance
+            data = orjson.loads(response.content)
             logger.debug("Successfully parsed JSON from %s", url)
             return data
 
@@ -379,7 +329,7 @@ class HttpClient:
             else:
                 raise
 
-        except json.JSONDecodeError as e:
+        except (orjson.JSONDecodeError, TypeError, ValueError) as e:
             msg = (
                 f"Invalid JSON response from {url}: {e}. "
                 f"Raw text was: {raw_response_text[:1000]}..."
@@ -413,13 +363,8 @@ class HttpClient:
         url = self._build_url(path)
         body_bytes = b""
         if data is not None:
-            body_bytes = json.dumps(data).encode("utf-8")
+            body_bytes = orjson.dumps(data)
         auth_headers = build_headers(method, url, body_bytes)
-        headers = dict(self.session.headers)
-        headers.update(auth_headers)
-        # Only add Content-Type for requests with body (POST/PUT)
-        if data is not None:
-            headers["Content-Type"] = "application/json"
         normalized_params = self._normalize_params(params)
         correlation_id = f"req-{id(self)}-{id(path)}"
         logger.debug(
@@ -431,12 +376,14 @@ class HttpClient:
         for agent_idx, agent in enumerate(self._USER_AGENTS):
             if agent_idx > 0:
                 logger.info(f"Retrying with fallback User-Agent: {agent}")
-                self._setup_default_headers(user_agent_idx=agent_idx)
-                headers = dict(self.session.headers)
-                headers.update(auth_headers)
-                # Only add Content-Type for requests with body (POST/PUT)
-                if data is not None:
-                    headers["Content-Type"] = "application/json"
+
+            # Compose headers for this specific attempt without modifying session state
+            headers = self._setup_default_headers(user_agent_idx=agent_idx)
+            headers.update(auth_headers)
+            # Only add Content-Type for requests with body (POST/PUT)
+            if data is not None:
+                headers["Content-Type"] = "application/json"
+
             try:
                 # Use provided timeout or fall back to instance timeout
                 request_timeout = timeout if timeout is not None else self.timeout
@@ -455,22 +402,23 @@ class HttpClient:
                     return response
                 # Check for redirect loop or HTML response
                 content_type = response.headers.get("Content-Type", "")
+                is_json = content_type.startswith("application/json")
+                is_html = content_type.startswith("text/html")
                 if response.status_code in (301, 302, 303, 307, 308):
                     logger.warning(
                         f"Received redirect ({response.status_code}) to "
                         f"{response.headers.get('Location')}"
                     )
-                    last_exception = NetworkError(
-                        f"Redirected to {response.headers.get('Location')}", url=url
-                    )
-                    continue
-                if not content_type.startswith("application/json"):
-                    logger.warning(f"Non-JSON response received: {content_type}")
+                    return self._handle_response(response, url)
+                if response.status_code == 403 and is_html:
+                    logger.warning(f"HTML 403 received: {content_type}")
                     logger.debug(f"Response text: {response.text[:500]}")
                     last_exception = NetworkError(
                         f"Non-JSON response received: {content_type}", url=url
                     )
                     continue
+                if not is_json:
+                    return self._handle_response(response, url)
                 # Try to parse JSON and handle as usual
                 return self._handle_response(response, url)
             except requests.exceptions.TooManyRedirects as e:
@@ -483,6 +431,8 @@ class HttpClient:
                 logger.exception(e)
                 last_exception = NetworkError(msg, url=url)
                 continue
+            except AthenaError:
+                raise
             except Exception as e:
                 logger.error(f"[{correlation_id}] Exception: {e}")
                 logger.exception(e)

@@ -34,9 +34,6 @@ class ExplorationState:
         default_factory=deque
     )  # BFS queue: (concept, depth, path)
     visited_ids: Set[int] = field(default_factory=set)  # Set of processed concept IDs
-    cache: Dict[int, ConceptDetails] = field(
-        default_factory=dict
-    )  # In-memory cache for concept details
     results: Dict[str, Any] = field(
         default_factory=lambda: {
             "direct_matches": [],
@@ -51,6 +48,8 @@ class ExplorationState:
     max_total_concepts: int = 0  # Maximum total concepts to discover
     max_api_calls: int = 0  # Maximum API calls to make
     max_time_seconds: int = 0  # Maximum time to run exploration
+    max_concepts_per_list: int = 500  # Cap individual result lists to manage memory
+    discovery_lock: Optional[asyncio.Lock] = None  # Protect shared discovery state
 
     def __post_init__(self) -> None:
         """Initialize default values for dataclass fields."""
@@ -125,6 +124,7 @@ class ConceptExplorer:
         state.max_total_concepts = max_total_concepts
         state.max_api_calls = max_api_calls
         state.max_time_seconds = max_time_seconds
+        state.discovery_lock = asyncio.Lock()
 
         # Step 1: Initial search and seeding
         logger.info(f"Performing direct search for: {query}")
@@ -227,6 +227,22 @@ class ConceptExplorer:
             include_relationships: Whether to explore relationships
             vocabulary_priority: Preferred vocabularies
         """
+        discovery_semaphore = asyncio.Semaphore(10)
+
+        async def _discover_with_limit(
+            concept: Concept, depth: int, path: List[int], ids_to_fetch: Set[int]
+        ) -> None:
+            async with discovery_semaphore:
+                await self._discover_neighbors(
+                    concept,
+                    depth,
+                    path,
+                    state,
+                    ids_to_fetch,
+                    include_synonyms,
+                    include_relationships,
+                )
+
         while state.queue:
             # Check limits before processing
             current_time = asyncio.get_event_loop().time()
@@ -258,6 +274,8 @@ class ConceptExplorer:
             logger.info(f"Processing {level_size} concepts at current depth level")
 
             # Process all nodes at current depth
+            tasks = []
+            current_depth: Optional[int] = None
             for _ in range(level_size):
                 # Check limits again in case we've hit them during processing
                 if (
@@ -269,26 +287,31 @@ class ConceptExplorer:
                     break
 
                 concept, depth, path = state.queue.popleft()
+                if current_depth is None:
+                    current_depth = depth
 
                 # Skip if we've reached max depth
                 if depth >= max_exploration_depth:
                     continue
 
-                # Discover neighbors (synonyms and relationships)
-                await self._discover_neighbors(
-                    concept,
-                    depth,
-                    path,
-                    state,
-                    ids_to_fetch_details,
-                    include_synonyms,
-                    include_relationships,
+                tasks.append(
+                    _discover_with_limit(concept, depth, path, ids_to_fetch_details)
                 )
 
+            if tasks:
+                await asyncio.gather(*tasks)
+
             # Batch fetch details for all discovered concepts
-            if ids_to_fetch_details and state.api_call_count < state.max_api_calls:
+            if (
+                ids_to_fetch_details
+                and state.api_call_count < state.max_api_calls
+                and current_depth is not None
+            ):
                 await self._process_batch_results(
-                    ids_to_fetch_details, state, depth + 1, vocabulary_priority
+                    ids_to_fetch_details,
+                    state,
+                    current_depth + 1,
+                    vocabulary_priority,
                 )
 
     async def _discover_neighbors(
@@ -325,6 +348,52 @@ class ConceptExplorer:
                 concept, depth, path, state, ids_to_fetch_details
             )
 
+    async def _record_discovered_id(
+        self,
+        concept_id: int,
+        state: ExplorationState,
+        ids_to_fetch_details: Set[int],
+    ) -> None:
+        if state.discovery_lock is None:
+            if (
+                concept_id not in state.visited_ids
+                and concept_id not in ids_to_fetch_details
+                and len(state.visited_ids) < state.max_total_concepts
+            ):
+                ids_to_fetch_details.add(concept_id)
+            return
+
+        async with state.discovery_lock:
+            if (
+                concept_id not in state.visited_ids
+                and concept_id not in ids_to_fetch_details
+                and len(state.visited_ids) < state.max_total_concepts
+            ):
+                ids_to_fetch_details.add(concept_id)
+
+    async def _record_visited_concept(
+        self,
+        concept: Concept,
+        state: ExplorationState,
+        next_depth: int,
+    ) -> None:
+        if state.discovery_lock is None:
+            if (
+                len(state.visited_ids) < state.max_total_concepts
+                and concept.id not in state.visited_ids
+            ):
+                state.queue.append((concept, next_depth, [concept.id]))
+                state.visited_ids.add(concept.id)
+            return
+
+        async with state.discovery_lock:
+            if (
+                len(state.visited_ids) < state.max_total_concepts
+                and concept.id not in state.visited_ids
+            ):
+                state.queue.append((concept, next_depth, [concept.id]))
+                state.visited_ids.add(concept.id)
+
     async def _discover_synonym_neighbors(
         self,
         concept: Concept,
@@ -353,11 +422,9 @@ class ConceptExplorer:
                 state.api_call_count += 1
 
                 for synonym_concept in synonym_results.all():
-                    if (
-                        synonym_concept.id not in state.visited_ids
-                        and len(state.visited_ids) < state.max_total_concepts
-                    ):
-                        ids_to_fetch_details.add(synonym_concept.id)
+                    await self._record_discovered_id(
+                        synonym_concept.id, state, ids_to_fetch_details
+                    )
 
             except Exception as e:
                 logger.warning(
@@ -393,11 +460,9 @@ class ConceptExplorer:
 
             for group in relationships.items:
                 for rel in group.relationships:
-                    if (
-                        rel.targetConceptId not in state.visited_ids
-                        and len(state.visited_ids) < state.max_total_concepts
-                    ):
-                        ids_to_fetch_details.add(rel.targetConceptId)
+                    await self._record_discovered_id(
+                        rel.targetConceptId, state, ids_to_fetch_details
+                    )
 
         except Exception as e:
             logger.warning(f"Could not get relationships for concept {concept.id}: {e}")
@@ -425,6 +490,14 @@ class ConceptExplorer:
         remaining_time = state.max_time_seconds - (now - state.start_time)
         if remaining_time < 0.3:
             return
+
+        remaining_slots = state.max_total_concepts - len(state.visited_ids)
+        if remaining_slots <= 0:
+            return
+        if len(ids_to_fetch_details) > remaining_slots:
+            ids_to_fetch_details = set(
+                sorted(ids_to_fetch_details)[:remaining_slots]
+            )
 
         try:
             # Batch fetch concept details
@@ -457,20 +530,14 @@ class ConceptExplorer:
                 # Add to appropriate result category
                 if concept.standardConcept == "Standard":
                     if concept not in state.results["synonym_matches"]:
-                        state.results["synonym_matches"].append(concept)
+                        if len(state.results["synonym_matches"]) < state.max_concepts_per_list:
+                            state.results["synonym_matches"].append(concept)
                 else:
                     if concept not in state.results["relationship_matches"]:
-                        state.results["relationship_matches"].append(concept)
+                        if len(state.results["relationship_matches"]) < state.max_concepts_per_list:
+                            state.results["relationship_matches"].append(concept)
 
-                # Add to queue for further exploration if within limits
-                if (
-                    len(state.visited_ids) < state.max_total_concepts
-                    and concept.id not in state.visited_ids
-                ):
-                    # Create a simple path for this concept
-                    new_path = [concept.id]
-                    state.queue.append((concept, next_depth, new_path))
-                    state.visited_ids.add(concept.id)
+                await self._record_visited_concept(concept, state, next_depth)
 
         except Exception as e:
             logger.warning(f"Error processing batch results: {e}")
@@ -479,7 +546,8 @@ class ConceptExplorer:
         self, concept_ids: Set[int]
     ) -> List[Union[ConceptDetails, BaseException]]:
         """
-        Fetch concept details for multiple IDs concurrently.
+        Fetch concept details for multiple IDs concurrently with a semaphore
+        to prevent overwhelming the API or hitting OS limits.
 
         Args:
             concept_ids: Set of concept IDs to fetch details for
@@ -493,10 +561,22 @@ class ConceptExplorer:
         ):
             raise NotImplementedError("Async client not available")
 
+        # Use a semaphore to limit concurrency (default to 10)
+        semaphore = asyncio.Semaphore(10)
+
+        async def _wrapped_fetch(concept_id: int) -> Union[ConceptDetails, BaseException]:
+            async with semaphore:
+                try:
+                    return await self.client.get_concept_details(concept_id)
+                except Exception as e:
+                    logger.exception(
+                        "Error fetching concept details for concept_id %s",
+                        concept_id,
+                    )
+                    return e
+
         # Create tasks for concurrent execution
-        tasks = [
-            self.client.get_concept_details(concept_id) for concept_id in concept_ids
-        ]
+        tasks = [_wrapped_fetch(concept_id) for concept_id in concept_ids]
 
         # Execute all tasks concurrently with exception handling
         results = await asyncio.gather(*tasks, return_exceptions=True)

@@ -8,7 +8,6 @@ import logging
 import time
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
-from .async_client import AthenaAsyncClient
 from .db.base import DatabaseConnector
 from .exceptions import APIError, AthenaError
 from .http import HttpClient
@@ -176,6 +175,13 @@ class AthenaClient:
             **kwargs,
         }
 
+        # Handle boosts if provided in kwargs or query object
+        boosts = kwargs.get("boosts")
+        if isinstance(query, Q) and not boosts:
+            # If it's a complex query, we might want to automatically use boosts
+            # but for now let's keep it consistent with the user's explicit intent
+            pass
+
         # Configure retry settings for this call
         max_attempts = max(
             1,
@@ -202,7 +208,21 @@ class AthenaClient:
             for attempt in range(max_attempts):
                 try:
                     # Reuse existing HTTP client session - just pass timeout dynamically
-                    response = self.http.get("/concepts", params=params, timeout=operation_timeout)
+                    # If boosts are present, we must use POST
+                    if boosts:
+                        # Extract boosts from kwargs to pass in data
+                        data = {"boosts": boosts}
+                        # Create a copy of params without boosts
+                        search_params = params.copy()
+                        search_params.pop("boosts", None)
+                        response = self.http.post(
+                            "/concepts", 
+                            params=search_params, 
+                            data=data, 
+                            timeout=operation_timeout
+                        )
+                    else:
+                        response = self.http.get("/concepts", params=params, timeout=operation_timeout)
 
                     # Raise APIError for any error response with errorMessage
                     # and errorCode
@@ -258,14 +278,23 @@ class AthenaClient:
                             )
 
                     search_response = ConceptSearchResponse.model_validate(response)
-                    return SearchResult(search_response, self)
+                    return SearchResult(
+                        search_response, self, query=query, **kwargs
+                    )
 
                 except Exception as e:
                     if isinstance(e, APIError):
-                        # API errors are not retryable, raise immediately
-                        raise
+                        # Some API errors (like timeouts reported in the body) 
+                        # should actually be retried if we have attempts left.
+                        # Others (like invalid parameters) should be raised immediately.
+                        is_retryable = any(
+                            term in str(e).lower() 
+                            for term in ["timeout", "throttled", "rate limit", "busy"]
+                        )
+                        if not is_retryable:
+                            raise
 
-                    # For network errors, retry if we have attempts left
+                    # For network errors or retryable API errors, retry if we have attempts left
                     if attempt < max_attempts - 1:
                         logger.info(
                             f"Retrying search due to {type(e).__name__} "
@@ -304,10 +333,12 @@ class AthenaClient:
             clear, actionable messages without requiring try-catch blocks.
         """
         max_attempts = 3 if auto_retry else 1
+        from .utils import get_operation_timeout
+        operation_timeout = get_operation_timeout("details", 1)
 
         for attempt in range(max_attempts):
             try:
-                response = self.http.get(f"/concepts/{concept_id}")
+                response = self.http.get(f"/concepts/{concept_id}", timeout=operation_timeout)
 
                 # Check if the response is an error response
                 if (
@@ -338,8 +369,12 @@ class AthenaClient:
 
             except Exception as e:
                 if isinstance(e, APIError):
-                    # API errors are not retryable, raise immediately
-                    raise
+                    is_retryable = any(
+                        term in str(e).lower() 
+                        for term in ["timeout", "throttled", "rate limit", "busy"]
+                    )
+                    if not is_retryable:
+                        raise
                 elif attempt < max_attempts - 1:
                     # For other errors, retry if we have attempts left
                     logger.info(
@@ -380,10 +415,12 @@ class AthenaClient:
             clear, actionable messages without requiring try-catch blocks.
         """
         max_attempts = 3 if auto_retry else 1
+        from .utils import get_operation_timeout
+        operation_timeout = get_operation_timeout("relationships", 1)
 
         for attempt in range(max_attempts):
             try:
-                response = self.http.get(f"/concepts/{concept_id}/relationships")
+                response = self.http.get(f"/concepts/{concept_id}/relationships", timeout=operation_timeout)
 
                 # Check if the response is an error response
                 if (
@@ -414,8 +451,12 @@ class AthenaClient:
 
             except Exception as e:
                 if isinstance(e, APIError):
-                    # API errors are not retryable, raise immediately
-                    raise
+                    is_retryable = any(
+                        term in str(e).lower() 
+                        for term in ["timeout", "throttled", "rate limit", "busy"]
+                    )
+                    if not is_retryable:
+                        raise
                 elif attempt < max_attempts - 1:
                     # For other errors, retry if we have attempts left
                     logger.info(
@@ -625,7 +666,7 @@ class AthenaClient:
 
         return summary
 
-    async def generate_concept_set(
+    def generate_concept_set(
         self,
         query: str,
         db_connection_string: str,
@@ -634,25 +675,82 @@ class AthenaClient:
         confidence_threshold: float = 0.7,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """Generate a validated concept set using the async client."""
+        """
+        Generate a validated concept set from a search query.
+        
+        This method is synchronous and blocks until the operation is complete.
+        For asynchronous usage, use `generate_concept_set_async`.
+        """
+        import asyncio
+        
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+        if loop.is_running():
+            # If we are in a running loop (like Jupyter or a specialized CLI environment), 
+            # we must run the coroutine in a separate thread to avoid nested asyncio.run errors.
+            import threading
+            from concurrent.futures import ThreadPoolExecutor
+            
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    lambda: asyncio.run(
+                        self.generate_concept_set_async(
+                            query,
+                            db_connection_string,
+                            strategy,
+                            include_descendants,
+                            confidence_threshold,
+                            **kwargs
+                        )
+                    )
+                )
+                return future.result()
+        else:
+            return asyncio.run(
+                self.generate_concept_set_async(
+                    query,
+                    db_connection_string,
+                    strategy,
+                    include_descendants,
+                    confidence_threshold,
+                    **kwargs
+                )
+            )
 
-        async_client = AthenaAsyncClient(
-            base_url=self.http.base_url,
-            token=str(self.http.session.headers.get("Authorization", "")),
-        )
+    async def generate_concept_set_async(
+        self,
+        query: str,
+        db_connection_string: str,
+        strategy: str = "fallback",
+        include_descendants: bool = True,
+        confidence_threshold: float = 0.7,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Generate a validated concept set asynchronously using the async client."""
+        from .async_client import AthenaAsyncClient
 
         from .db.sqlalchemy_connector import SQLAlchemyConnector
 
-        db_connector = SQLAlchemyConnector.from_connection_string(db_connection_string)
-        async_client.set_database_connector(db_connector)
+        async with AthenaAsyncClient(
+            base_url=self.http.base_url,
+            token=str(self.http.session.headers.get("Authorization", "")),
+        ) as async_client:
+            db_connector = SQLAlchemyConnector.from_connection_string(
+                db_connection_string
+            )
+            async_client.set_database_connector(db_connector)
 
-        return await async_client.generate_concept_set(
-            query,
-            strategy=strategy,
-            include_descendants=include_descendants,
-            confidence_threshold=confidence_threshold,
-            **kwargs,
-        )
+            return await async_client.generate_concept_set(
+                query,
+                strategy=strategy,
+                include_descendants=include_descendants,
+                confidence_threshold=confidence_threshold,
+                **kwargs,
+            )
 
 
 class Athena(AthenaClient):

@@ -6,7 +6,7 @@ This module handles Bearer token and HMAC authentication for the Athena API.
 
 import logging
 from base64 import b64encode
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from .settings import get_settings
@@ -63,7 +63,9 @@ def build_headers(
             )
             return hdrs
         try:
-            nonce = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            import uuid
+            # Use microsecond precision and a random UUID to prevent nonce collisions
+            nonce = f"{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')}Z-{uuid.uuid4().hex[:8]}"
             to_sign = f"{method}\n{url}\n\n{nonce}\n{body.decode()}"
             key = serialization_module.load_pem_private_key(
                 s.ATHENA_PRIVATE_KEY.encode(), password=None

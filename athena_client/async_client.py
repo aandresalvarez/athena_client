@@ -6,9 +6,12 @@ It uses httpx for HTTP requests and provides automatic retry logic, rate limitin
 and error handling.
 """
 
-import json
+import asyncio
 import logging
-from typing import Any, Dict, Optional, Union, cast
+import random
+from typing import Any, Dict, Optional, Tuple, Union, cast
+
+import orjson
 
 try:
     import httpx
@@ -35,8 +38,10 @@ from .models import (
     ConceptRelationship,
     ConceptSearchResponse,
 )
+from .query import Q
 from .search_result import SearchResult
 from .settings import get_settings
+from .utils.user_agents import USER_AGENTS, get_default_headers
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +66,8 @@ class AsyncHttpClient:
         timeout: Optional[int] = None,
         max_retries: Optional[int] = None,
         backoff_factor: Optional[float] = None,
+        enable_throttling: bool = True,
+        throttle_delay_range: Tuple[float, float] = (0.1, 0.3),
         db_connector: Optional[DatabaseConnector] = None,
     ) -> None:
         """
@@ -74,6 +81,10 @@ class AsyncHttpClient:
             timeout: HTTP timeout in seconds
             max_retries: Maximum number of retry attempts
             backoff_factor: Exponential backoff factor for retries
+            enable_throttling: Whether to throttle requests to be respectful
+                to the server
+            throttle_delay_range: Range of delays for throttling (min, max)
+                in seconds
         """
         settings = get_settings()
 
@@ -91,94 +102,84 @@ class AsyncHttpClient:
         self.timeout = timeout or settings.ATHENA_TIMEOUT_SECONDS
         self.max_retries = max_retries or settings.ATHENA_MAX_RETRIES
         self.backoff_factor = backoff_factor or settings.ATHENA_BACKOFF_FACTOR
+        self.enable_throttling = enable_throttling
+        self.throttle_delay_range = throttle_delay_range
 
         # Create httpx client
         self.client = httpx.AsyncClient(timeout=self.timeout)
 
-        # Set up default headers
-        self._setup_default_headers()
+    # Use centralized User-Agents (kept as class attribute for easier testing/mocking)
+    _USER_AGENTS = USER_AGENTS
 
-    # List of browser-like User-Agents for fallback, aligned with sync client (updated to 2025 versions)
-    _USER_AGENTS = [
-        (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        (
-            "Mozilla/5.0 (X11; Linux x86_64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15"
-        ),
-        (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) "
-            "Gecko/20100101 Firefox/133.0"
-        ),
-    ]
-
-    def _setup_default_headers(self, user_agent_idx: int = 0) -> None:
+    def _setup_default_headers(self, user_agent_idx: int = 0) -> Dict[str, str]:
         """Set up default headers for all requests, with optional User-Agent index."""
-        # DO NOT include Content-Type in default headers - add it only for POST/PUT requests
-        # Add browser-like security headers that modern browsers send
-        default_headers = {
-            "Accept": "application/json, text/plain, */*",  # Modern, simple Accept header
-            "User-Agent": self._USER_AGENTS[user_agent_idx],
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://athena.ohdsi.org/search-terms/terms",  # More realistic referer
-            "Origin": "https://athena.ohdsi.org",  # Origin header for CORS
-            "Sec-Fetch-Site": "same-origin",  # Browser security header
-            "Sec-Fetch-Mode": "cors",  # Browser security header
-            "Sec-Fetch-Dest": "empty",  # Browser security header
-            "Connection": "keep-alive",
-        }
-        # Reset and apply new defaults
-        self.client.headers.clear()
-        self.client.headers.update(default_headers)
-        logger.debug("Default headers set: %s", default_headers)
+        return get_default_headers(user_agent_idx=user_agent_idx)
+
+    async def _throttle_request(self) -> None:
+        """
+        Implement request throttling to prevent overwhelming the server.
+
+        This adds a small delay between requests to be respectful to the API.
+        """
+        if not self.enable_throttling:
+            return
+
+        delay = random.uniform(  # nosec B311
+            self.throttle_delay_range[0], self.throttle_delay_range[1]
+        )
+        await asyncio.sleep(delay)
+
+        logger.debug(f"Request throttled for {delay:.3f} seconds")
+
+    async def aclose(self) -> None:
+        """Close the underlying HTTP client."""
+        await self.client.aclose()
+
+    def __del__(self) -> None:
+        """Warning if the client was not properly closed."""
+        try:
+            import sys
+
+            # Use getattr for Python versions where sys.is_finalizing is unavailable.
+            if getattr(sys, "is_finalizing", lambda: False)():
+                return
+            client = getattr(self, "client", None)
+            if client is None:
+                return
+            if not getattr(client, "is_closed", True):
+                logger.warning(
+                    "AsyncHttpClient was not closed. "
+                    "Use 'async with' or call 'await client.aclose()' to avoid leaking resources."
+                )
+        except Exception:
+            # Destructors should not raise exceptions
+            return
+
+    async def __aenter__(self) -> "AsyncHttpClient":
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        await self.aclose()
 
     def _compose_request_headers(
         self, auth_headers: Dict[str, str], user_agent_idx: int, has_data: bool
     ) -> Dict[str, str]:
         """Compose final request headers from defaults and auth without duplication."""
-        headers = dict(self.client.headers)
+        # Get base headers for the specific User-Agent index without modifying state
+        headers = self._setup_default_headers(user_agent_idx=user_agent_idx)
         headers.update(auth_headers)
         # Only add Content-Type for requests with body (POST/PUT)
         if has_data:
             headers["Content-Type"] = "application/json"
-        headers.setdefault("Referer", "https://athena.ohdsi.org/search-terms/terms")
-        headers.setdefault("Accept-Language", "en-US,en;q=0.9")
-        headers.setdefault("User-Agent", self._USER_AGENTS[user_agent_idx])
         return headers
 
     def _build_url(self, path: str) -> str:
         """
-        Build full URL by joining base URL and path.
-
-        Args:
-            path: API endpoint path
-
-        Returns:
-            Full URL
+        Build full URL for API request.
         """
-        # Handle paths that start with / to ensure they're appended correctly
-        if path.startswith("/"):
-            # Remove the leading / and join with base_url
-            path = path[1:]
-
         # Ensure base_url doesn't end with / and path doesn't start with /
-        if self.base_url.endswith("/"):
-            base = self.base_url[:-1]
-        else:
-            base = self.base_url
-
-        if path.startswith("/"):
-            path = path[1:]
+        base = self.base_url.rstrip("/")
+        path = path.lstrip("/")
 
         full_url = f"{base}/{path}"
 
@@ -197,15 +198,24 @@ class AsyncHttpClient:
 
         Returns:
             Parsed JSON response
-
-        Raises:
-            ClientError: For 4xx status codes
-            ServerError: For 5xx status codes
-            NetworkError: For connection errors
         """
         try:
+            if response.status_code in (301, 302, 303, 307, 308):
+                location = response.headers.get("Location")
+                redirect_note = f" to {location}" if location else ""
+                request_url = (
+                    str(response.request.url) if response.request is not None else ""
+                )
+                msg = (
+                    f"Unexpected redirect ({response.status_code}){redirect_note} "
+                    f"when accessing {request_url}. Check the API base URL."
+                )
+                logger.error(msg)
+                raise NetworkError(msg, url=request_url)
+
             response.raise_for_status()
-            return response.json()
+            # Use orjson for better performance
+            return orjson.loads(response.content)
         except httpx.HTTPStatusError as e:
             if 400 <= response.status_code < 500:
                 raise ClientError(
@@ -263,7 +273,7 @@ class AsyncHttpClient:
 
         # Convert data to JSON bytes if provided
         if data is not None:
-            body_bytes = json.dumps(data).encode("utf-8")
+            body_bytes = orjson.dumps(data)
 
         # Build authentication headers
         auth_headers = build_headers(method, url, body_bytes)
@@ -273,17 +283,19 @@ class AsyncHttpClient:
         correlation_id = f"req-{id(self)}-{id(path)}"
         logger.debug(f"[{correlation_id}] {method} {url}")
 
+        await self._throttle_request()
+
         last_exception: Optional[Exception] = None
         # Try with multiple browser-like User-Agents if needed
         for agent_idx, agent in enumerate(self._USER_AGENTS):
             if agent_idx > 0:
                 logger.info(f"Retrying with fallback User-Agent: {agent}")
-                self._setup_default_headers(user_agent_idx=agent_idx)
-                headers = self._compose_request_headers(
-                    auth_headers,
-                    agent_idx,
-                    data is not None,
-                )
+
+            headers = self._compose_request_headers(
+                auth_headers,
+                agent_idx,
+                data is not None,
+            )
             try:
                 request_timeout = timeout if timeout is not None else self.timeout
                 response = await self.client.request(
@@ -307,7 +319,9 @@ class AsyncHttpClient:
 
                 # Validate content type is JSON
                 content_type = response.headers.get("Content-Type", "")
-                if not content_type.startswith("application/json"):
+                is_json = content_type.startswith("application/json")
+                is_html = content_type.startswith("text/html")
+                if response.status_code == 403 and is_html:
                     logger.warning(
                         (
                             "Non-JSON response received: "
@@ -318,18 +332,8 @@ class AsyncHttpClient:
                         f"Non-JSON response received: {content_type}",
                     )
                     continue
-
-                # If 403, try next User-Agent before raising
-                if response.status_code == 403:
-                    logger.warning(
-                        "Access forbidden (403). Retrying with different User-Agent."
-                    )
-                    last_exception = ClientError(
-                        "Access forbidden: 403 from server",
-                        status_code=response.status_code,
-                        response=response.text,
-                    )
-                    continue
+                if not is_json:
+                    return await self._handle_response(response)
 
                 return await self._handle_response(response)
 
@@ -354,6 +358,7 @@ class AsyncHttpClient:
         path: str,
         params: Optional[Dict[str, Any]] = None,
         raw_response: bool = False,
+        timeout: Optional[int] = None,
     ) -> Union[Dict[str, Any], httpx.Response]:
         """
         Make a GET request to the Athena API.
@@ -362,11 +367,22 @@ class AsyncHttpClient:
             path: API endpoint path
             params: Query parameters
             raw_response: Whether to return the raw response object
+            timeout: Optional timeout override for this request
 
         Returns:
             Parsed JSON response or raw Response object
         """
-        return await self.request("GET", path, params=params, raw_response=raw_response)
+        if timeout is None:
+            return await self.request(
+                "GET", path, params=params, raw_response=raw_response
+            )
+        return await self.request(
+            "GET",
+            path,
+            params=params,
+            raw_response=raw_response,
+            timeout=timeout,
+        )
 
     async def post(
         self,
@@ -420,6 +436,8 @@ class AthenaAsyncClient:
         timeout: Optional[int] = None,
         max_retries: Optional[int] = None,
         backoff_factor: Optional[float] = None,
+        enable_throttling: bool = True,
+        throttle_delay_range: Tuple[float, float] = (0.1, 0.3),
         db_connector: Optional[DatabaseConnector] = None,
     ) -> None:
         """
@@ -433,6 +451,10 @@ class AthenaAsyncClient:
             timeout: HTTP timeout in seconds
             max_retries: Maximum number of retry attempts
             backoff_factor: Exponential backoff factor for retries
+            enable_throttling: Whether to throttle requests to be respectful
+                to the server
+            throttle_delay_range: Range of delays for throttling (min, max)
+                in seconds
             db_connector: Optional database connector for local OMOP validation
         """
         self.http = AsyncHttpClient(
@@ -443,6 +465,8 @@ class AthenaAsyncClient:
             timeout=timeout,
             max_retries=max_retries,
             backoff_factor=backoff_factor,
+            enable_throttling=enable_throttling,
+            throttle_delay_range=throttle_delay_range,
         )
         self.db_connector = db_connector
 
@@ -451,9 +475,42 @@ class AthenaAsyncClient:
 
         self.db_connector = connector
 
+    async def aclose(self) -> None:
+        """Close the underlying HTTP client."""
+        await self.http.aclose()
+
+    def __del__(self) -> None:
+        """Warning if the client was not properly closed."""
+        try:
+            import sys
+
+            # Use getattr for Python versions where sys.is_finalizing is unavailable.
+            if getattr(sys, "is_finalizing", lambda: False)():
+                return
+            http = getattr(self, "http", None)
+            if http is None:
+                return
+            client = getattr(http, "client", None)
+            if client is None:
+                return
+            if not getattr(client, "is_closed", True):
+                logger.warning(
+                    "AthenaAsyncClient was not closed. "
+                    "Use 'async with' or call 'await client.aclose()' to avoid leaking resources."
+                )
+        except Exception:
+            # Destructors should not raise exceptions
+            return
+
+    async def __aenter__(self) -> "AthenaAsyncClient":
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        await self.aclose()
+
     async def search_concepts(
         self,
-        query: str = "",
+        query: Union[str, Q] = "",
         exact: Optional[str] = None,
         fuzzy: bool = False,
         wildcard: Optional[str] = None,
@@ -464,6 +521,7 @@ class AthenaAsyncClient:
         domain: Optional[str] = None,
         vocabulary: Optional[str] = None,
         standard_concept: Optional[str] = None,
+        timeout: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Search for concepts in the Athena vocabulary.
@@ -480,18 +538,24 @@ class AthenaAsyncClient:
             domain: Filter by domain
             vocabulary: Filter by vocabulary
             standard_concept: Filter by standard concept status
+            timeout: Optional request timeout
 
         Returns:
             Raw API response data
         """
+        if isinstance(query, Q):
+            query_str = str(query)
+        else:
+            query_str = query
+
         # Convert page to start parameter that the API expects
         start = page * page_size
 
         params: Dict[str, Any] = {"pageSize": page_size, "start": start}
 
         # Add query if provided
-        if query:
-            params["query"] = query
+        if query_str:
+            params["query"] = query_str
 
         # Add filters if provided
         if exact:
@@ -513,16 +577,17 @@ class AthenaAsyncClient:
                 "/concepts",
                 data={"boosts": boosts} if boosts else {},
                 params=params,
+                timeout=timeout,
             )
             return cast(Dict[str, Any], response)
 
         # Otherwise use standard GET endpoint
-        response = await self.http.get("/concepts", params=params)
+        response = await self.http.get("/concepts", params=params, timeout=timeout)
         return cast(Dict[str, Any], response)
 
     async def search(
         self,
-        query: str = "",
+        query: Union[str, Q] = "",
         size: int = 20,
         page: int = 0,
         **kwargs: Any,
@@ -539,14 +604,29 @@ class AthenaAsyncClient:
         Returns:
             SearchResult object with convenient access methods
         """
+        from .utils import estimate_query_size, get_operation_timeout
+
+        if isinstance(query, Q):
+            query_str = str(query)
+        else:
+            query_str = query
+
+        # Calculate appropriate timeout based on query complexity
+        estimated_size = estimate_query_size(query_str)
+        operation_timeout = get_operation_timeout("search", estimated_size)
+
         # Convert size to pageSize for the API
         search_kwargs: Dict[str, Any] = dict(kwargs)
         search_kwargs["page_size"] = size
         search_kwargs["page"] = page
 
-        response_data = await self.search_concepts(query=query, **search_kwargs)
+        # Use dynamic timeout if not explicitly provided in kwargs
+        if "timeout" not in search_kwargs:
+            search_kwargs["timeout"] = operation_timeout
+
+        response_data = await self.search_concepts(query=query_str, **search_kwargs)
         response = ConceptSearchResponse.model_validate(response_data)
-        return SearchResult(response, self)
+        return SearchResult(response, self, query=query, **kwargs)
 
     async def details(self, concept_id: int) -> ConceptDetails:
         """
@@ -595,7 +675,9 @@ class AthenaAsyncClient:
         Returns:
             ConceptDetails object
         """
-        response = await self.http.get(f"/concepts/{concept_id}")
+        from .utils import get_operation_timeout
+        timeout = get_operation_timeout("details", 1)
+        response = await self.http.get(f"/concepts/{concept_id}", timeout=timeout)
         data = cast(Dict[str, Any], response)
         return ConceptDetails.model_validate(data)
 
@@ -623,8 +705,10 @@ class AthenaAsyncClient:
         if only_standard:
             params["standardConcepts"] = "true"
 
+        from .utils import get_operation_timeout
+        timeout = get_operation_timeout("relationships", 1)
         response = await self.http.get(
-            f"/concepts/{concept_id}/relationships", params=params
+            f"/concepts/{concept_id}/relationships", params=params, timeout=timeout
         )
         data = cast(Dict[str, Any], response)
         return ConceptRelationship.model_validate(data)
@@ -647,8 +731,12 @@ class AthenaAsyncClient:
             ConceptRelationsGraph object
         """
         params = {"depth": depth, "zoomLevel": zoom_level}
+        from .utils import get_operation_timeout
+        # Use depth and zoom to estimate complexity
+        estimated_complexity = depth * zoom_level * 5
+        timeout = get_operation_timeout("graph", estimated_complexity)
         response = await self.http.get(
-            f"/concepts/{concept_id}/relations", params=params
+            f"/concepts/{concept_id}/relations", params=params, timeout=timeout
         )
         data = cast(Dict[str, Any], response)
         return ConceptRelationsGraph.model_validate(data)
