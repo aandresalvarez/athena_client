@@ -1361,27 +1361,24 @@ class TestDatabaseIntegration:
         mock_connector = Mock()
         mock_connector_class.from_connection_string.return_value = mock_connector
 
+        from athena_client.async_client import AthenaAsyncClient
+
         created_clients = []
+        original_init = AthenaAsyncClient.__init__
 
-        class FakeAsyncClient:
-            def __init__(self, *args: object, **kwargs: object) -> None:
-                self.db_connector: object = None
-                self.generate_concept_set = AsyncMock(return_value=expected)
-                created_clients.append(self)
-
-            async def __aenter__(self) -> "FakeAsyncClient":
-                return self
-
-            async def __aexit__(
-                self, exc_type: object, exc_val: object, exc_tb: object
-            ) -> None:
-                return None
-
-            def set_database_connector(self, connector: object) -> None:
-                self.db_connector = connector
+        def _tracking_init(self, *args: object, **kwargs: object) -> None:
+            original_init(self, *args, **kwargs)
+            created_clients.append(self)
 
         client = AthenaClient()
-        with patch("athena_client.async_client.AthenaAsyncClient", FakeAsyncClient):
+        with (
+            patch.object(AthenaAsyncClient, "__init__", _tracking_init),
+            patch.object(
+                AthenaAsyncClient,
+                "generate_concept_set",
+                new=AsyncMock(return_value=expected),
+            ) as mock_generate_concept_set,
+        ):
             result = await client.generate_concept_set_async(
                 "test", "sqlite:///db", strategy="strict", include_descendants=False
             )
@@ -1392,7 +1389,7 @@ class TestDatabaseIntegration:
         assert created_clients
         async_client = created_clients[0]
         assert async_client.db_connector is mock_connector
-        async_client.generate_concept_set.assert_awaited_once_with(
+        mock_generate_concept_set.assert_awaited_once_with(
             "test",
             strategy="strict",
             include_descendants=False,
