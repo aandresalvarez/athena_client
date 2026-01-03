@@ -55,10 +55,11 @@ class TestAsyncHttpClient:
     async def test_default_headers_include_browser_like_fields(self):
         """Async client should include Referer and Accept-Language headers."""
         client = AsyncHttpClient()
-        assert "Referer" in client.client.headers
-        assert client.client.headers["Referer"].startswith("https://athena.ohdsi.org/")
-        assert "Accept-Language" in client.client.headers
-        assert "User-Agent" in client.client.headers
+        headers = client._setup_default_headers()
+        assert "Referer" in headers
+        assert headers["Referer"].startswith("https://athena.ohdsi.org/")
+        assert "Accept-Language" in headers
+        assert "User-Agent" in headers
 
     @pytest.mark.asyncio
     async def test_build_url(self):

@@ -184,12 +184,12 @@ class TestConceptSetGenerator:
         explorer.map_to_standard_concepts = AsyncMock(
             return_value=[{"concept": concept_a}, {"concept": concept_b}]
         )
-
+    
         db = Mock()
         db.validate_concepts.side_effect = [[], [3]]
-        db.get_standard_mapping.return_value = {2: 3}
+        db.get_standard_mapping.return_value = {2: [3]}
         db.get_descendants.return_value = [4]
-
+    
         generator = ConceptSetGenerator(explorer, db)
         result = await generator.create_from_query("test")
 
@@ -223,11 +223,11 @@ class TestConceptSetGenerator:
         explorer.map_to_standard_concepts = AsyncMock(
             return_value=[{"concept": concept_a}, {"concept": concept_b}]
         )
-
+    
         db = Mock()
         db.validate_concepts.side_effect = [[], []]
-        db.get_standard_mapping.return_value = {2: 3}
-
+        db.get_standard_mapping.return_value = {2: [3]}
+    
         generator = ConceptSetGenerator(explorer, db)
         result = await generator.create_from_query("test")
 

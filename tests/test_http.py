@@ -72,8 +72,8 @@ class TestHttpClient:
     def test_setup_default_headers(self):
         """Test default headers setup."""
         client = HttpClient()
-        headers = client.session.headers
-
+        headers = client._setup_default_headers()
+    
         assert headers["Accept"] == "application/json, text/plain, */*"
         assert "Content-Type" not in headers  # Should not be in default headers
         assert headers["Origin"] == "https://athena.ohdsi.org"

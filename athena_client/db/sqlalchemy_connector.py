@@ -74,14 +74,14 @@ class SQLAlchemyConnector:
 
     def get_standard_mapping(
         self, non_standard_concept_ids: List[int]
-    ) -> Dict[int, int]:
+    ) -> Dict[int, List[int]]:
         """Find standard mappings for the given non-standard concept IDs."""
         if not non_standard_concept_ids:
             return {}
 
         # Chunk the IDs to avoid database parameter limits
         chunk_size = 1000
-        mapping: Dict[int, int] = {}
+        mapping: Dict[int, List[int]] = {}
         
         with self._engine.connect() as connection:
             for i in range(0, len(non_standard_concept_ids), chunk_size):
@@ -100,8 +100,10 @@ class SQLAlchemyConnector:
                 result = connection.execute(stmt, {"ids": chunk})
                 for row in result:
                     concept_id_1, concept_id_2, standard_flag = row
-                    if standard_flag == "S" and concept_id_1 not in mapping:
-                        mapping[concept_id_1] = concept_id_2
+                    if standard_flag == "S":
+                        if concept_id_1 not in mapping:
+                            mapping[concept_id_1] = []
+                        mapping[concept_id_1].append(concept_id_2)
 
         return mapping
 

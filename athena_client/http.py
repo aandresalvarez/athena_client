@@ -98,9 +98,6 @@ class HttpClient:
         # Create session with retry configuration
         self.session = self._create_session()
 
-        # Set up default headers
-        self._setup_default_headers()
-
         logger.debug("HttpClient initialized with base URL: %s", self.base_url)
 
     def _create_session(self) -> requests.Session:
@@ -140,7 +137,7 @@ class HttpClient:
     # Use centralized User-Agents
     _USER_AGENTS = USER_AGENTS
 
-    def _setup_default_headers(self, user_agent_idx: int = 0) -> None:
+    def _setup_default_headers(self, user_agent_idx: int = 0) -> Dict[str, str]:
         """Set up default headers for all requests, with optional User-Agent index."""
         # DO NOT include Content-Type in default headers - add it only for POST/PUT requests
         # Add browser-like security headers that modern browsers send
@@ -155,9 +152,7 @@ class HttpClient:
             "Sec-Fetch-Dest": "empty",  # Browser security header
             "Connection": "keep-alive",
         }
-        self.session.headers.clear()
-        self.session.headers.update(default_headers)
-        logger.debug("Default headers set: %s", default_headers)
+        return default_headers
 
     def _throttle_request(self) -> None:
         """
@@ -396,11 +391,6 @@ class HttpClient:
         if data is not None:
             body_bytes = orjson.dumps(data)
         auth_headers = build_headers(method, url, body_bytes)
-        headers = dict(self.session.headers)
-        headers.update(auth_headers)
-        # Only add Content-Type for requests with body (POST/PUT)
-        if data is not None:
-            headers["Content-Type"] = "application/json"
         normalized_params = self._normalize_params(params)
         correlation_id = f"req-{id(self)}-{id(path)}"
         logger.debug(
@@ -412,12 +402,14 @@ class HttpClient:
         for agent_idx, agent in enumerate(self._USER_AGENTS):
             if agent_idx > 0:
                 logger.info(f"Retrying with fallback User-Agent: {agent}")
-                self._setup_default_headers(user_agent_idx=agent_idx)
-                headers = dict(self.session.headers)
-                headers.update(auth_headers)
-                # Only add Content-Type for requests with body (POST/PUT)
-                if data is not None:
-                    headers["Content-Type"] = "application/json"
+            
+            # Compose headers for this specific attempt without modifying session state
+            headers = self._setup_default_headers(user_agent_idx=agent_idx)
+            headers.update(auth_headers)
+            # Only add Content-Type for requests with body (POST/PUT)
+            if data is not None:
+                headers["Content-Type"] = "application/json"
+            
             try:
                 # Use provided timeout or fall back to instance timeout
                 request_timeout = timeout if timeout is not None else self.timeout

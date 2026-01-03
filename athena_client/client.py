@@ -175,6 +175,13 @@ class AthenaClient:
             **kwargs,
         }
 
+        # Handle boosts if provided in kwargs or query object
+        boosts = kwargs.get("boosts")
+        if isinstance(query, Q) and not boosts:
+            # If it's a complex query, we might want to automatically use boosts
+            # but for now let's keep it consistent with the user's explicit intent
+            pass
+
         # Configure retry settings for this call
         max_attempts = max(
             1,
@@ -201,7 +208,21 @@ class AthenaClient:
             for attempt in range(max_attempts):
                 try:
                     # Reuse existing HTTP client session - just pass timeout dynamically
-                    response = self.http.get("/concepts", params=params, timeout=operation_timeout)
+                    # If boosts are present, we must use POST
+                    if boosts:
+                        # Extract boosts from kwargs to pass in data
+                        data = {"boosts": boosts}
+                        # Create a copy of params without boosts
+                        search_params = params.copy()
+                        search_params.pop("boosts", None)
+                        response = self.http.post(
+                            "/concepts", 
+                            params=search_params, 
+                            data=data, 
+                            timeout=operation_timeout
+                        )
+                    else:
+                        response = self.http.get("/concepts", params=params, timeout=operation_timeout)
 
                     # Raise APIError for any error response with errorMessage
                     # and errorCode
@@ -258,7 +279,7 @@ class AthenaClient:
 
                     search_response = ConceptSearchResponse.model_validate(response)
                     return SearchResult(
-                        search_response, self, query=query_str, **kwargs
+                        search_response, self, query=query, **kwargs
                     )
 
                 except Exception as e:
@@ -665,16 +686,12 @@ class AthenaClient:
             asyncio.set_event_loop(loop)
             
         if loop.is_running():
-            # If we are in a running loop (like Jupyter), we can't use asyncio.run
-            # We might need a different strategy or just warn the user.
-            # However, for simplicity in this library, we'll try to use the current loop
-            # if possible, or fallback to nest_asyncio if available (not ideal).
-            # For now, let's just use a simplified sync implementation if possible
-            # or document that it's a wrapper.
+            # If we are in a running loop (like Jupyter or a specialized CLI environment), 
+            # we must run the coroutine in a separate thread to avoid nested asyncio.run errors.
             import threading
             from concurrent.futures import ThreadPoolExecutor
             
-            with ThreadPoolExecutor() as executor:
+            with ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(
                     lambda: asyncio.run(
                         self.generate_concept_set_async(

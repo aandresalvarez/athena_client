@@ -97,13 +97,10 @@ class AsyncHttpClient:
         # Create httpx client
         self.client = httpx.AsyncClient(timeout=self.timeout)
 
-        # Set up default headers
-        self._setup_default_headers()
-
     # Use centralized User-Agents
     _USER_AGENTS = USER_AGENTS
 
-    def _setup_default_headers(self, user_agent_idx: int = 0) -> None:
+    def _setup_default_headers(self, user_agent_idx: int = 0) -> Dict[str, str]:
         """Set up default headers for all requests, with optional User-Agent index."""
         # DO NOT include Content-Type in default headers - add it only for POST/PUT requests
         # Add browser-like security headers that modern browsers send
@@ -118,23 +115,18 @@ class AsyncHttpClient:
             "Sec-Fetch-Dest": "empty",  # Browser security header
             "Connection": "keep-alive",
         }
-        # Reset and apply new defaults
-        self.client.headers.clear()
-        self.client.headers.update(default_headers)
-        logger.debug("Default headers set: %s", default_headers)
+        return default_headers
 
     def _compose_request_headers(
         self, auth_headers: Dict[str, str], user_agent_idx: int, has_data: bool
     ) -> Dict[str, str]:
         """Compose final request headers from defaults and auth without duplication."""
-        headers = dict(self.client.headers)
+        # Get base headers for the specific User-Agent index without modifying state
+        headers = self._setup_default_headers(user_agent_idx=user_agent_idx)
         headers.update(auth_headers)
         # Only add Content-Type for requests with body (POST/PUT)
         if has_data:
             headers["Content-Type"] = "application/json"
-        headers.setdefault("Referer", "https://athena.ohdsi.org/search-terms/terms")
-        headers.setdefault("Accept-Language", "en-US,en;q=0.9")
-        headers.setdefault("User-Agent", self._USER_AGENTS[user_agent_idx])
         return headers
 
     def _build_url(self, path: str) -> str:
@@ -259,12 +251,12 @@ class AsyncHttpClient:
         for agent_idx, agent in enumerate(self._USER_AGENTS):
             if agent_idx > 0:
                 logger.info(f"Retrying with fallback User-Agent: {agent}")
-                self._setup_default_headers(user_agent_idx=agent_idx)
-                headers = self._compose_request_headers(
-                    auth_headers,
-                    agent_idx,
-                    data is not None,
-                )
+            
+            headers = self._compose_request_headers(
+                auth_headers,
+                agent_idx,
+                data is not None,
+            )
             try:
                 request_timeout = timeout if timeout is not None else self.timeout
                 response = await self.client.request(
@@ -445,6 +437,7 @@ class AthenaAsyncClient:
         domain: Optional[str] = None,
         vocabulary: Optional[str] = None,
         standard_concept: Optional[str] = None,
+        timeout: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Search for concepts in the Athena vocabulary.
@@ -461,6 +454,7 @@ class AthenaAsyncClient:
             domain: Filter by domain
             vocabulary: Filter by vocabulary
             standard_concept: Filter by standard concept status
+            timeout: Optional request timeout
 
         Returns:
             Raw API response data
@@ -494,11 +488,12 @@ class AthenaAsyncClient:
                 "/concepts",
                 data={"boosts": boosts} if boosts else {},
                 params=params,
+                timeout=timeout,
             )
             return cast(Dict[str, Any], response)
 
         # Otherwise use standard GET endpoint
-        response = await self.http.get("/concepts", params=params)
+        response = await self.http.get("/concepts", params=params, timeout=timeout)
         return cast(Dict[str, Any], response)
 
     async def search(
@@ -520,10 +515,20 @@ class AthenaAsyncClient:
         Returns:
             SearchResult object with convenient access methods
         """
+        from .utils import estimate_query_size, get_operation_timeout
+
+        # Calculate appropriate timeout based on query complexity
+        estimated_size = estimate_query_size(query)
+        operation_timeout = get_operation_timeout("search", estimated_size)
+
         # Convert size to pageSize for the API
         search_kwargs: Dict[str, Any] = dict(kwargs)
         search_kwargs["page_size"] = size
         search_kwargs["page"] = page
+        
+        # Use dynamic timeout if not explicitly provided in kwargs
+        if "timeout" not in search_kwargs:
+            search_kwargs["timeout"] = operation_timeout
 
         response_data = await self.search_concepts(query=query, **search_kwargs)
         response = ConceptSearchResponse.model_validate(response_data)

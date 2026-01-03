@@ -63,7 +63,9 @@ def build_headers(
             )
             return hdrs
         try:
-            nonce = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            import uuid
+            # Use microsecond precision and a random UUID to prevent nonce collisions
+            nonce = f"{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')}Z-{uuid.uuid4().hex[:8]}"
             to_sign = f"{method}\n{url}\n\n{nonce}\n{body.decode()}"
             key = serialization_module.load_pem_private_key(
                 s.ATHENA_PRIVATE_KEY.encode(), password=None

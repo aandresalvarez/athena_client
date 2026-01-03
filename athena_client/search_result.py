@@ -114,11 +114,17 @@ class SearchResult:
                 "Use await anext_page() instead."
             )
             
+        # Clean kwargs to avoid "multiple values for argument" error
+        search_kwargs = self._kwargs.copy()
+        search_kwargs.pop("page", None)
+        search_kwargs.pop("size", None)
+        search_kwargs.pop("pageSize", None)
+            
         return self._client.search(
             query=self._query or "",
             page=current_page + 1,
             size=size,
-            **self._kwargs,
+            **search_kwargs,
         )
 
     async def anext_page(self) -> Optional["SearchResult"]:
@@ -133,11 +139,18 @@ class SearchResult:
         size = self._response.size
         if current_page is None or size is None:
             return None
+            
+        # Clean kwargs to avoid "multiple values for argument" error
+        search_kwargs = self._kwargs.copy()
+        search_kwargs.pop("page", None)
+        search_kwargs.pop("size", None)
+        search_kwargs.pop("pageSize", None)
+            
         return await self._client.search(
             query=self._query or "",
             page=current_page + 1,
             size=size,
-            **self._kwargs,
+            **search_kwargs,
         )
 
     def previous_page(self) -> Optional["SearchResult"]:
@@ -160,11 +173,17 @@ class SearchResult:
                 "Use await aprevious_page() instead."
             )
             
+        # Clean kwargs to avoid "multiple values for argument" error
+        search_kwargs = self._kwargs.copy()
+        search_kwargs.pop("page", None)
+        search_kwargs.pop("size", None)
+        search_kwargs.pop("pageSize", None)
+            
         return self._client.search(
             query=self._query or "",
             page=current_page - 1,
             size=size,
-            **self._kwargs,
+            **search_kwargs,
         )
 
     async def aprevious_page(self) -> Optional["SearchResult"]:
@@ -179,11 +198,18 @@ class SearchResult:
         size = self._response.size
         if current_page is None or size is None:
             return None
+            
+        # Clean kwargs to avoid "multiple values for argument" error
+        search_kwargs = self._kwargs.copy()
+        search_kwargs.pop("page", None)
+        search_kwargs.pop("size", None)
+        search_kwargs.pop("pageSize", None)
+            
         return await self._client.search(
             query=self._query or "",
             page=current_page - 1,
             size=size,
-            **self._kwargs,
+            **search_kwargs,
         )
 
     @property

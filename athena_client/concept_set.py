@@ -91,18 +91,23 @@ class ConceptSetGenerator:
                     [c.id for c in non_standard_concepts]
                 )
                 if local_mappings:
-                    mapped_standard_id = list(local_mappings.values())[0]
-                    validated_ids = self.db.validate_concepts([mapped_standard_id])
+                    # Collect all standard IDs from all mappings
+                    all_mapped_standard_ids = []
+                    for mapped_ids in local_mappings.values():
+                        all_mapped_standard_ids.extend(mapped_ids)
+                    
+                    validated_ids = self.db.validate_concepts(all_mapped_standard_ids)
                     if validated_ids:
                         final_ids = set(validated_ids)
                         if include_descendants:
                             final_ids.update(self.db.get_descendants(validated_ids))
-                        original_non_standard = list(local_mappings.keys())[0]
+                        
+                        source_ids = list(local_mappings.keys())
                         warning = (
                             "Initial standard concepts not found locally. "
-                            "Recovered by mapping non-standard concept "
-                            f"{original_non_standard} "
-                            f"to standard concept {mapped_standard_id}."
+                            "Recovered by mapping non-standard concepts "
+                            f"{source_ids[:5]}{'...' if len(source_ids) > 5 else ''} "
+                            "to their standard equivalents."
                         )
                         return self._build_success_response(
                             query=query,

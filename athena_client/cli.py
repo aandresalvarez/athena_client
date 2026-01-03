@@ -354,13 +354,11 @@ def generate_set(
     click.echo(f"Generating concept set for '{query}'...")
 
     try:
-        concept_set = asyncio.run(
-            client.generate_concept_set(
-                query=query,
-                db_connection_string=db_connection,
-                strategy=strategy,
-                include_descendants=not no_descendants,
-            )
+        concept_set = client.generate_concept_set(
+            query=query,
+            db_connection_string=db_connection,
+            strategy=strategy,
+            include_descendants=not no_descendants,
         )
 
         _format_output(concept_set, ctx.obj["output"], ctx.obj.get("console"))
@@ -407,17 +405,7 @@ def details(ctx: Any, concept_id: int) -> None:
     )
 
     result = client.details(concept_id)
-    output_data: Any
-    if ctx.obj["output"] == "json":
-        output_data = result.model_dump_json(indent=2)
-    elif ctx.obj["output"] == "yaml":
-        import yaml
-
-        output_data = yaml.dump(result.model_dump())
-    else:
-        output_data = result.model_dump()
-
-    _format_output(output_data, ctx.obj["output"], ctx.obj.get("console"))
+    _format_output(result, ctx.obj["output"], ctx.obj.get("console"))
 
 
 @cli.command()
@@ -439,17 +427,7 @@ def relationships(
     )
 
     result = client.relationships(concept_id)
-    output_data: Any
-    if ctx.obj["output"] == "json":
-        output_data = result.model_dump_json(indent=2)
-    elif ctx.obj["output"] == "yaml":
-        import yaml
-
-        output_data = yaml.dump(result.model_dump())
-    else:
-        output_data = result.model_dump()
-
-    _format_output(output_data, ctx.obj["output"], ctx.obj.get("console"))
+    _format_output(result, ctx.obj["output"], ctx.obj.get("console"))
 
 
 @cli.command()
@@ -468,17 +446,7 @@ def graph(ctx: Any, concept_id: int, depth: int, zoom_level: int) -> None:
         depth=depth,
         zoom_level=zoom_level,
     )
-    output_data: Any
-    if ctx.obj["output"] == "json":
-        output_data = result.model_dump_json(indent=2)
-    elif ctx.obj["output"] == "yaml":
-        import yaml
-
-        output_data = yaml.dump(result.model_dump())
-    else:
-        output_data = result.model_dump()
-
-    _format_output(output_data, ctx.obj["output"], ctx.obj.get("console"))
+    _format_output(result, ctx.obj["output"], ctx.obj.get("console"))
 
 
 @cli.command()
@@ -491,19 +459,7 @@ def summary(ctx: Any, concept_id: int) -> None:
     )
 
     result = client.summary(concept_id)
-    output_data: dict[str, Any] = {}
-    for key in ["details", "relationships", "graph"]:
-        val = result.get(key)
-        if val is None:
-            output_data[key] = {}
-        elif isinstance(val, dict):
-            output_data[key] = val
-        elif hasattr(val, "model_dump"):
-            output_data[key] = val.model_dump()
-        else:
-            output_data[key] = val
-
-    _format_output(output_data, ctx.obj["output"], ctx.obj.get("console"))
+    _format_output(result, ctx.obj["output"], ctx.obj.get("console"))
 
 
 def main() -> None:
