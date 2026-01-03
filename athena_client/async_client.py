@@ -546,7 +546,7 @@ class AthenaAsyncClient:
 
         response_data = await self.search_concepts(query=query, **search_kwargs)
         response = ConceptSearchResponse.model_validate(response_data)
-        return SearchResult(response, self)
+        return SearchResult(response, self, query=query, **kwargs)
 
     async def details(self, concept_id: int) -> ConceptDetails:
         """

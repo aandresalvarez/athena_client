@@ -24,15 +24,25 @@ if TYPE_CHECKING:
 class SearchResult:
     """Wrapper for search results that provides convenient access methods."""
 
-    def __init__(self, response: ConceptSearchResponse, client: Any) -> None:
+    def __init__(
+        self,
+        response: ConceptSearchResponse,
+        client: Any,
+        query: Optional[str] = None,
+        **kwargs: Any,
+    ) -> None:
         """Initialize the search result wrapper.
 
         Args:
             response: The search response from the API
             client: The client instance for making additional requests
+            query: The original search query
+            **kwargs: Original search parameters
         """
         self._response = response
         self._client = client
+        self._query = query
+        self._kwargs = kwargs
 
     def all(self) -> List[Concept]:
         """Get all concepts from the current page.
@@ -96,10 +106,38 @@ class SearchResult:
         size = self._response.size
         if current_page is None or size is None:
             return None
+            
+        import inspect
+        if inspect.iscoroutinefunction(self._client.search):
+            raise RuntimeError(
+                "Cannot use sync next_page() with an async client. "
+                "Use await anext_page() instead."
+            )
+            
         return self._client.search(
-            query="",  # This would need to be the original query
+            query=self._query or "",
             page=current_page + 1,
             size=size,
+            **self._kwargs,
+        )
+
+    async def anext_page(self) -> Optional["SearchResult"]:
+        """Get the next page of results asynchronously.
+
+        Returns:
+            SearchResult for the next page, or None if no more pages
+        """
+        if self._response.last:
+            return None
+        current_page = self._response.number
+        size = self._response.size
+        if current_page is None or size is None:
+            return None
+        return await self._client.search(
+            query=self._query or "",
+            page=current_page + 1,
+            size=size,
+            **self._kwargs,
         )
 
     def previous_page(self) -> Optional["SearchResult"]:
@@ -114,10 +152,38 @@ class SearchResult:
         size = self._response.size
         if current_page is None or size is None:
             return None
+            
+        import inspect
+        if inspect.iscoroutinefunction(self._client.search):
+            raise RuntimeError(
+                "Cannot use sync previous_page() with an async client. "
+                "Use await aprevious_page() instead."
+            )
+            
         return self._client.search(
-            query="",  # This would need to be the original query
+            query=self._query or "",
             page=current_page - 1,
             size=size,
+            **self._kwargs,
+        )
+
+    async def aprevious_page(self) -> Optional["SearchResult"]:
+        """Get the previous page of results asynchronously.
+
+        Returns:
+            SearchResult for the previous page, or None if no previous pages
+        """
+        if self._response.first:
+            return None
+        current_page = self._response.number
+        size = self._response.size
+        if current_page is None or size is None:
+            return None
+        return await self._client.search(
+            query=self._query or "",
+            page=current_page - 1,
+            size=size,
+            **self._kwargs,
         )
 
     @property

@@ -68,6 +68,61 @@ class ConceptType(str, Enum):
     CLASSIFICATION = "Classification"
     NON_STANDARD = "Non-standard"
 
+    @classmethod
+    def _missing_(cls, value: object) -> Optional["ConceptType"]:
+        """Handle shorthand values from the API (S, C)."""
+        if not isinstance(value, str):
+            return None
+            
+        mapping = {
+            "S": cls.STANDARD,
+            "C": cls.CLASSIFICATION,
+            "N": cls.NON_STANDARD,
+            # Handle cases where API returns lowercase or other variants
+            "standard": cls.STANDARD,
+            "classification": cls.CLASSIFICATION,
+            "non-standard": cls.NON_STANDARD,
+        }
+        return mapping.get(value.strip().upper()) or mapping.get(value.strip().lower())
+
+class InvalidReason(str, Enum):
+    """Reason why a concept is invalid."""
+
+    UPDATED = "U"
+    DELETED = "D"
+    VALID = "V"  # Sometimes 'V' is used, though usually null
+    INVALID = "Invalid"
+
+    @classmethod
+    def _missing_(cls, value: object) -> Optional["InvalidReason"]:
+        """Handle various shorthand or null values."""
+        if value is None or value == "":
+            return None
+        if not isinstance(value, str):
+            return None
+            
+        val = value.strip()
+        val_upper = val.upper()
+        
+        if val_upper == "U":
+            return cls.UPDATED
+        if val_upper == "D":
+            return cls.DELETED
+        if val_upper == "V":
+            return cls.VALID
+        if val.lower() == "invalid":
+            return cls.INVALID
+        
+        # Handle full names if they appear
+        mapping = {
+            "UPDATED": cls.UPDATED,
+            "DELETED": cls.DELETED,
+            "VALID": cls.VALID,
+            "INVALID": cls.INVALID,
+        }
+        return mapping.get(val_upper)
+
+
 
 class Concept(BaseModel):
     """Basic concept information returned in search results."""
@@ -81,7 +136,7 @@ class Concept(BaseModel):
         None, description="Standard concept flag"
     )
     code: str = Field(..., description="Concept code")
-    invalidReason: Optional[str] = Field(None, description="Invalid reason")
+    invalidReason: Optional[InvalidReason] = Field(None, description="Invalid reason")
     score: Optional[float] = Field(None, description="Search score")
 
 
@@ -116,7 +171,7 @@ class ConceptDetails(BaseModel):
         None, description="Standard concept flag"
     )
     conceptCode: str = Field(..., description="Concept code")
-    invalidReason: Optional[str] = Field(None, description="Invalid reason")
+    invalidReason: Optional[InvalidReason] = Field(None, description="Invalid reason")
     validStart: str = Field(..., description="Valid start date")
     validEnd: str = Field(..., description="Valid end date")
     synonyms: Optional[List[Union[str, Dict[str, Any]]]] = Field(
@@ -233,6 +288,7 @@ __all__ = [
     "ConceptRelationship",
     "ConceptSearchResponse",
     "ConceptType",
+    "InvalidReason",
     "Domain",
     "GraphLink",
     "GraphTerm",

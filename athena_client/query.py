@@ -257,5 +257,13 @@ class Q:
             # Gracefully handle unknown operators by returning the raw value
             return self.value
         else:
-            # For basic query types, return the value
+            # For basic query types, return the formatted value
+            if self.query_type == "phrase":
+                # Ensure it's in quotes for string representation
+                val = self.value
+                if not val.startswith('"') or not val.endswith('"'):
+                    val = f'"{val}"'
+                return val
+            # For term, exact, wildcard, we use the value as is 
+            # (exact and wildcard already add quotes/patterns in their classmethods)
             return self.value

@@ -258,7 +258,9 @@ class AthenaClient:
                             )
 
                     search_response = ConceptSearchResponse.model_validate(response)
-                    return SearchResult(search_response, self)
+                    return SearchResult(
+                        search_response, self, query=query_str, **kwargs
+                    )
 
                 except Exception as e:
                     if isinstance(e, APIError):

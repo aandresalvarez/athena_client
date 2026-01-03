@@ -5,14 +5,32 @@ This module provides a CLI for interacting with the Athena API.
 """
 
 import asyncio
+import csv
 import json
 import sys
+from io import StringIO
 from typing import Any, List, Optional, cast
 
-import click
-import rich
-from rich.console import Console
-from rich.table import Table
+try:
+    import click
+except ImportError:
+    click = None  # type: ignore
+
+try:
+    import rich
+    from rich.console import Console
+    from rich.table import Table
+    from rich.syntax import Syntax
+except ImportError:
+    rich = None  # type: ignore
+    Console = None  # type: ignore
+    Table = None  # type: ignore
+    Syntax = None  # type: ignore
+
+try:
+    import yaml
+except ImportError:
+    yaml = None  # type: ignore
 
 from athena_client.models import Concept
 
@@ -79,7 +97,7 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
             import yaml
 
             print(yaml.dump(to_serializable(data)))
-        except ImportError:
+        except (ImportError, ModuleNotFoundError):
             print(
                 "The 'pyyaml' package is required for YAML output. "
                 "Install with 'pip install \"athena-client[yaml]\"'"

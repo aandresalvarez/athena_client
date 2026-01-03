@@ -471,6 +471,18 @@ class HttpClient:
                         f"Non-JSON response received: {content_type}", url=url
                     )
                     continue
+                # If 403, try next User-Agent
+                if response.status_code == 403:
+                    logger.warning(
+                        "Access forbidden (403). Retrying with different User-Agent."
+                    )
+                    last_exception = ClientError(
+                        "Access forbidden: 403 from server",
+                        status_code=response.status_code,
+                        response=response.text,
+                        url=url,
+                    )
+                    continue
                 # Try to parse JSON and handle as usual
                 return self._handle_response(response, url)
             except requests.exceptions.TooManyRedirects as e:
