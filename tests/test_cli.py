@@ -499,6 +499,27 @@ class TestCLI:
         # Verify that the CLI code includes logic to apply the top() method
         # when limit is provided. This checks that the code contains the
         # critical line that applies the limit
-        assert "results = results.top(limit)" in cli_code, (
+        assert "results.top(limit)" in cli_code or "limited_results = results.top(limit)" in cli_code, (
             "CLI implementation doesn't include code to apply limit using top() method"
         )
+
+    @patch("athena_client.cli._create_client")
+    def test_search_yaml_import_error_regression(self, mock_create_client):
+        """
+        Regression test: search with yaml output should handle missing 
+        pyyaml gracefully instead of raising a bare ImportError.
+        """
+        mock_client = mock_create_client.return_value
+        mock_results = Mock()
+        mock_results.to_list.return_value = [{"id": 1, "name": "Test"}]
+        mock_client.search.return_value = mock_results
+
+        # Patch sys.modules to simulate missing yaml
+        with patch.dict("sys.modules", {"yaml": None}):
+            runner = CliRunner()
+            # The search command itself doesn't import yaml anymore, 
+            # it happens in _format_output which handles it.
+            result = runner.invoke(cli, ["search", "test", "-o", "yaml"])
+
+            assert result.exit_code == 1
+            assert "The 'pyyaml' package is required for YAML output" in result.output

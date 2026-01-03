@@ -496,7 +496,6 @@ class TestSearchResult:
         assert result.total_pages == 1
 
     def test_search_result_with_partial_pageable(self):
-        """Test search result with partial pageable information."""
         self.mock_response.totalElements = None
         self.mock_response.totalPages = None
         self.mock_response.number = None
@@ -512,3 +511,60 @@ class TestSearchResult:
         assert result.page_size == 25
         # Should fall back to content length for total_elements
         assert result.total_elements == 2
+
+    def test_next_page_regression_multiple_values(self):
+        """
+        Regression test for multiple values for argument 'page' bug.
+        Should not crash if page or size is in self._kwargs.
+        """
+        self.mock_response.last = False
+        self.mock_response.number = 0
+        self.mock_response.size = 20
+        
+        # kwargs already containing page/size
+        self.search_result = SearchResult(
+            self.mock_response, 
+            self.mock_client, 
+            query="test",
+            page=0, 
+            size=20,
+            pageSize=20
+        )
+        
+        self.mock_client.search.return_value = Mock()
+        
+        # This should NOT raise TypeError: search() got multiple values for argument 'page'
+        result = self.search_result.next_page()
+        
+        assert result is not None
+        # Verify it was called correctly with incremented page
+        self.mock_client.search.assert_called_once()
+        args, kwargs = self.mock_client.search.call_args
+        assert kwargs["page"] == 1
+        assert kwargs["size"] == 20
+        assert kwargs["query"] == "test"
+
+    def test_next_page_preserves_boosts(self):
+        """
+        Regression test: next_page should preserve boosts dictionary
+        and pass it to the search method.
+        """
+        self.mock_response.last = False
+        self.mock_response.number = 0
+        self.mock_response.size = 20
+        
+        boosts = {"conceptName": 2.0}
+        self.search_result = SearchResult(
+            self.mock_response, 
+            self.mock_client, 
+            query="test",
+            boosts=boosts
+        )
+        
+        self.mock_client.search.return_value = Mock()
+        
+        self.search_result.next_page()
+        
+        self.mock_client.search.assert_called_once()
+        args, kwargs = self.mock_client.search.call_args
+        assert kwargs["boosts"] == boosts

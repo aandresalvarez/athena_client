@@ -605,3 +605,91 @@ class TestAthenaAsyncClient:
 
         with pytest.raises(RuntimeError):
             await client.generate_concept_set("test")
+
+    @pytest.mark.asyncio
+    async def test_async_http_client_header_race_condition_regression(self):
+        """
+        Regression test: Concurrent requests should not interfere with each other's 
+        headers when one triggers a User-Agent rotation.
+        """
+        client = AsyncHttpClient()
+        
+        # Mock responses distinguishing requests by path
+        resp_403 = Mock(spec=httpx.Response)
+        resp_403.status_code = 403
+        resp_403.headers = {"Content-Type": "text/html"}
+        resp_403.text = "Forbidden"
+        resp_403.reason_phrase = "Forbidden"
+        
+        resp_200 = Mock(spec=httpx.Response)
+        resp_200.status_code = 200
+        resp_200.headers = {"Content-Type": "application/json"}
+        resp_200.json.return_value = {"ok": True}
+        resp_200.reason_phrase = "OK"
+        
+        with patch.object(client, "_USER_AGENTS", ["UA1", "UA2"]):
+            with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+                # We want to simulate Request 1 and Request 2 happening concurrently.
+                # Request 1 will call request() twice (due to 403 retry).
+                # Request 2 will call request() once.
+                
+                # Setup side effect to return 403 for /req1 first time, then 200
+                async def side_effect(method, url, **kwargs):
+                    if "/req1" in url:
+                        if not hasattr(side_effect, "req1_called"):
+                            side_effect.req1_called = True
+                            return resp_403
+                        return resp_200
+                    return resp_200
+                
+                mock_request.side_effect = side_effect
+                
+                # Run both concurrently
+                import asyncio
+                task1 = asyncio.create_task(client.request("GET", "/req1"))
+                task2 = asyncio.create_task(client.request("GET", "/req2"))
+                
+                await asyncio.gather(task1, task2)
+                
+                # Verify headers for each call
+                for call in mock_request.call_args_list:
+                    args, kwargs = call
+                    url = kwargs["url"]
+                    ua = kwargs["headers"]["User-Agent"]
+                    
+                    if "/req2" in url:
+                        # Request 2 should ALWAYS have UA1 because it never retried
+                        assert ua == "UA1", f"Request 2 used wrong UA: {ua}"
+                    elif "/req1" in url:
+                        # Request 1 should have UA1 on first call and UA2 on second
+                        pass # We already verified this implicitly by checking all calls
+                
+                # Check req1 specifically
+                req1_calls = [c for c in mock_request.call_args_list if "/req1" in c[1]["url"]]
+                assert len(req1_calls) == 2
+                assert req1_calls[0][1]["headers"]["User-Agent"] == "UA1"
+                assert req1_calls[1][1]["headers"]["User-Agent"] == "UA2"
+
+    @pytest.mark.asyncio
+    async def test_search_uses_dynamic_timeout_regression(self):
+        """
+        Regression test: search should calculate and use a dynamic timeout
+        if none is provided.
+        """
+        client = AthenaAsyncClient()
+        mock_response = {
+            "content": [],
+            "totalElements": 0,
+            "totalPages": 0,
+            "pageable": {"pageSize": 20, "pageNumber": 0},
+        }
+        
+        # Patch where it's defined - athena_client.utils.get_operation_timeout
+        with patch("athena_client.utils.get_operation_timeout", return_value=123) as mock_get_timeout:
+            with patch.object(client, "search_concepts", new_callable=AsyncMock, return_value=mock_response) as mock_search:
+                await client.search("aspirin")
+                
+                # Verify timeout was calculated
+                mock_get_timeout.assert_called_once()
+                # Verify search_concepts was called with the calculated timeout
+                assert mock_search.call_args[1]["timeout"] == 123
