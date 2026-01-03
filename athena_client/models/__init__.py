@@ -87,7 +87,7 @@ class ConceptType(str, Enum):
             "non-standard": cls.NON_STANDARD,
         }
         val = value.strip()
-        result = mapping.get(val.upper()) or mapping.get(val.lower())
+        result = mapping.get(val.upper())
         
         if result is None and val:
             logger.warning(f"Unrecognized ConceptType shorthand: '{val}'")

@@ -62,7 +62,7 @@ class TestAuth:
 
             # Mock the imports that happen inside build_headers
             mock_datetime = Mock()
-            mock_datetime.utcnow.return_value.strftime.return_value = (
+            mock_datetime.now.return_value.strftime.return_value = (
                 "2023-01-01T00:00:00Z"
             )
 
@@ -108,7 +108,7 @@ class TestAuth:
 
             # Mock the imports that happen inside build_headers
             mock_datetime = Mock()
-            mock_datetime.utcnow.return_value.strftime.return_value = (
+            mock_datetime.now.return_value.strftime.return_value = (
                 "2023-01-01T00:00:00Z"
             )
 
@@ -155,7 +155,7 @@ class TestAuth:
             
             mock_datetime = Mock()
             # Same timestamp for both calls
-            mock_datetime.utcnow.return_value.strftime.return_value = "2023-01-01T00:00:00.000000"
+            mock_datetime.now.return_value.strftime.return_value = "2023-01-01T00:00:00.000000"
             
             mock_serialization = Mock()
             mock_key = Mock()
@@ -207,7 +207,7 @@ class TestAuth:
 
             # Mock the imports that happen inside build_headers
             mock_datetime = Mock()
-            mock_datetime.utcnow.return_value.strftime.return_value = (
+            mock_datetime.now.return_value.strftime.return_value = (
                 "2023-01-01T00:00:00Z"
             )
 
@@ -242,7 +242,7 @@ class TestAuth:
 
             # Mock the imports that happen inside build_headers
             mock_datetime = Mock()
-            mock_datetime.utcnow.return_value.strftime.return_value = (
+            mock_datetime.now.return_value.strftime.return_value = (
                 "2023-01-01T00:00:00Z"
             )
 
@@ -290,7 +290,7 @@ class TestAuth:
 
             # Mock the imports that happen inside build_headers
             mock_datetime = Mock()
-            mock_datetime.utcnow.return_value.strftime.return_value = (
+            mock_datetime.now.return_value.strftime.return_value = (
                 "2023-01-01T00:00:00Z"
             )
 
@@ -334,7 +334,7 @@ class TestAuth:
 
             # Mock the imports that happen inside build_headers
             mock_datetime = Mock()
-            mock_datetime.utcnow.return_value.strftime.return_value = (
+            mock_datetime.now.return_value.strftime.return_value = (
                 "2023-01-01T00:00:00Z"
             )
 

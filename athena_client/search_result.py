@@ -122,9 +122,8 @@ class SearchResult:
             
         # Clean kwargs to avoid "multiple values for argument" error
         search_kwargs = self._kwargs.copy()
-        search_kwargs.pop("page", None)
-        search_kwargs.pop("size", None)
-        search_kwargs.pop("pageSize", None)
+        for key in ["page", "size", "pageSize", "page_size", "limit"]:
+            search_kwargs.pop(key, None)
             
         return self._client.search(
             query=self._query or "",
@@ -148,9 +147,8 @@ class SearchResult:
             
         # Clean kwargs to avoid "multiple values for argument" error
         search_kwargs = self._kwargs.copy()
-        search_kwargs.pop("page", None)
-        search_kwargs.pop("size", None)
-        search_kwargs.pop("pageSize", None)
+        for key in ["page", "size", "pageSize", "page_size", "limit"]:
+            search_kwargs.pop(key, None)
             
         return await self._client.search(
             query=self._query or "",
@@ -185,9 +183,8 @@ class SearchResult:
             
         # Clean kwargs to avoid "multiple values for argument" error
         search_kwargs = self._kwargs.copy()
-        search_kwargs.pop("page", None)
-        search_kwargs.pop("size", None)
-        search_kwargs.pop("pageSize", None)
+        for key in ["page", "size", "pageSize", "page_size", "limit"]:
+            search_kwargs.pop(key, None)
             
         return self._client.search(
             query=self._query or "",
@@ -211,9 +208,8 @@ class SearchResult:
             
         # Clean kwargs to avoid "multiple values for argument" error
         search_kwargs = self._kwargs.copy()
-        search_kwargs.pop("page", None)
-        search_kwargs.pop("size", None)
-        search_kwargs.pop("pageSize", None)
+        for key in ["page", "size", "pageSize", "page_size", "limit"]:
+            search_kwargs.pop(key, None)
             
         return await self._client.search(
             query=self._query or "",

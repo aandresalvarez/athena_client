@@ -425,13 +425,18 @@ class HttpClient:
                     )
                     continue
                 if not content_type.startswith("application/json"):
-                    logger.warning(f"Non-JSON response received: {content_type}")
-                    logger.debug(f"Response text: {response.text[:500]}")
-                    last_exception = NetworkError(
-                        f"Non-JSON response received: {content_type}", url=url
-                    )
-                    continue
-                # If 403, try next User-Agent
+                    # Only retry with fallback UA if it's a 403 or 200 (WAF block).
+                    # 5xx errors should fail immediately or use standard retries.
+                    if response.status_code in (403, 200):
+                        logger.warning(f"Non-JSON response received: {content_type}")
+                        logger.debug(f"Response text: {response.text[:500]}")
+                        last_exception = NetworkError(
+                            f"Non-JSON response received: {content_type}", url=url
+                        )
+                        continue
+                    else:
+                        return self._handle_response(response, url)
+                # If 403 with JSON (rare but possible), also try next User-Agent
                 if response.status_code == 403:
                     logger.warning(
                         "Access forbidden (403). Retrying with different User-Agent."

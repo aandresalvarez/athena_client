@@ -108,6 +108,18 @@ class AsyncHttpClient:
         """Close the underlying HTTP client."""
         await self.client.aclose()
 
+    def __del__(self) -> None:
+        """Warning if the client was not properly closed."""
+        try:
+            if hasattr(self, "client") and not self.client.is_closed:
+                logger.warning(
+                    "AsyncHttpClient was not closed. "
+                    "Use 'async with' or call 'await client.aclose()' to avoid leaking resources."
+                )
+        except Exception:
+            # Destructors should not raise exceptions
+            pass
+
     async def __aenter__(self) -> "AsyncHttpClient":
         return self
 
@@ -278,18 +290,23 @@ class AsyncHttpClient:
                 # Validate content type is JSON
                 content_type = response.headers.get("Content-Type", "")
                 if not content_type.startswith("application/json"):
-                    logger.warning(
-                        (
-                            "Non-JSON response received: "
-                            f"{content_type}; trying next User-Agent"
+                    # Only retry with fallback UA if it's a 403 or 200 (WAF block).
+                    # 5xx errors should fail immediately or use standard retries.
+                    if response.status_code in (403, 200):
+                        logger.warning(
+                            (
+                                "Non-JSON response received: "
+                                f"{content_type}; trying next User-Agent"
+                            )
                         )
-                    )
-                    last_exception = NetworkError(
-                        f"Non-JSON response received: {content_type}",
-                    )
-                    continue
+                        last_exception = NetworkError(
+                            f"Non-JSON response received: {content_type}",
+                        )
+                        continue
+                    else:
+                        return await self._handle_response(response)
 
-                # If 403, try next User-Agent before raising
+                # If 403 with JSON (rare but possible), also try next User-Agent
                 if response.status_code == 403:
                     logger.warning(
                         "Access forbidden (403). Retrying with different User-Agent."
@@ -424,6 +441,18 @@ class AthenaAsyncClient:
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self.http.aclose()
+
+    def __del__(self) -> None:
+        """Warning if the client was not properly closed."""
+        try:
+            if hasattr(self, "http") and hasattr(self.http, "client") and not self.http.client.is_closed:
+                logger.warning(
+                    "AthenaAsyncClient was not closed. "
+                    "Use 'async with' or call 'await client.aclose()' to avoid leaking resources."
+                )
+        except Exception:
+            # Destructors should not raise exceptions
+            pass
 
     async def __aenter__(self) -> "AthenaAsyncClient":
         return self
