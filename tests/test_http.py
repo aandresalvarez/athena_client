@@ -299,7 +299,7 @@ class TestHttpClient:
             client.request("POST", "/test", data={"key": "value"})
             mock_request.assert_called_once()
             call_args = mock_request.call_args
-            assert call_args[1]["data"] == b'{"key": "value"}'
+            assert call_args[1]["data"] == b'{"key":"value"}'
 
     @patch("athena_client.http.build_headers")
     def test_request_includes_security_headers(

@@ -6,9 +6,10 @@ It uses httpx for HTTP requests and provides automatic retry logic, rate limitin
 and error handling.
 """
 
-import json
 import logging
 from typing import Any, Dict, Optional, Union, cast
+
+import orjson
 
 try:
     import httpx
@@ -37,6 +38,7 @@ from .models import (
 )
 from .search_result import SearchResult
 from .settings import get_settings
+from .utils.user_agents import USER_AGENTS
 
 logger = logging.getLogger(__name__)
 
@@ -98,29 +100,8 @@ class AsyncHttpClient:
         # Set up default headers
         self._setup_default_headers()
 
-    # List of browser-like User-Agents for fallback, aligned with sync client (updated to 2025 versions)
-    _USER_AGENTS = [
-        (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        (
-            "Mozilla/5.0 (X11; Linux x86_64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15"
-        ),
-        (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) "
-            "Gecko/20100101 Firefox/133.0"
-        ),
-    ]
+    # Use centralized User-Agents
+    _USER_AGENTS = USER_AGENTS
 
     def _setup_default_headers(self, user_agent_idx: int = 0) -> None:
         """Set up default headers for all requests, with optional User-Agent index."""
@@ -263,7 +244,7 @@ class AsyncHttpClient:
 
         # Convert data to JSON bytes if provided
         if data is not None:
-            body_bytes = json.dumps(data).encode("utf-8")
+            body_bytes = orjson.dumps(data)
 
         # Build authentication headers
         auth_headers = build_headers(method, url, body_bytes)

@@ -197,7 +197,7 @@ class TestAsyncHttpClient:
             await client.request("POST", "/test", data={"key": "value"})
             mock_request.assert_called_once()
             call_args = mock_request.call_args
-            assert call_args[1]["content"] == b'{"key": "value"}'
+            assert call_args[1]["content"] == b'{"key":"value"}'
 
     @patch("athena_client.async_client.build_headers")
     @pytest.mark.asyncio

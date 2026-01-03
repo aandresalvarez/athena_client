@@ -27,17 +27,23 @@ class SQLAlchemyConnector:
         if not concept_ids:
             return []
 
-        stmt = text(
-            """
-                SELECT concept_id
-                FROM concept
-                WHERE concept_id IN :ids AND standard_concept = 'S'
-                """
-        ).bindparams(bindparam("ids", expanding=True))
-
+        # Chunk the IDs to avoid database parameter limits
+        chunk_size = 1000
+        validated_ids = []
+        
         with self._engine.connect() as connection:
-            result = connection.execute(stmt, {"ids": list(concept_ids)})
-            validated_ids = [row[0] for row in result]
+            for i in range(0, len(concept_ids), chunk_size):
+                chunk = list(concept_ids)[i : i + chunk_size]
+                stmt = text(
+                    """
+                        SELECT concept_id
+                        FROM concept
+                        WHERE concept_id IN :ids AND standard_concept = 'S'
+                        """
+                ).bindparams(bindparam("ids", expanding=True))
+                
+                result = connection.execute(stmt, {"ids": chunk})
+                validated_ids.extend([row[0] for row in result])
 
         return validated_ids
 
@@ -46,17 +52,23 @@ class SQLAlchemyConnector:
         if not concept_ids:
             return []
 
-        stmt = text(
-            """
-                SELECT descendant_concept_id
-                FROM concept_ancestor
-                WHERE ancestor_concept_id IN :ids
-                """
-        ).bindparams(bindparam("ids", expanding=True))
-
+        # Chunk the IDs to avoid database parameter limits
+        chunk_size = 1000
+        descendant_ids = []
+        
         with self._engine.connect() as connection:
-            result = connection.execute(stmt, {"ids": list(concept_ids)})
-            descendant_ids = [row[0] for row in result]
+            for i in range(0, len(concept_ids), chunk_size):
+                chunk = list(concept_ids)[i : i + chunk_size]
+                stmt = text(
+                    """
+                        SELECT descendant_concept_id
+                        FROM concept_ancestor
+                        WHERE ancestor_concept_id IN :ids
+                        """
+                ).bindparams(bindparam("ids", expanding=True))
+                
+                result = connection.execute(stmt, {"ids": chunk})
+                descendant_ids.extend([row[0] for row in result])
 
         return list(set(descendant_ids) - set(concept_ids))
 
@@ -67,24 +79,29 @@ class SQLAlchemyConnector:
         if not non_standard_concept_ids:
             return {}
 
-        stmt = text(
-            """
-            SELECT cr.concept_id_1, cr.concept_id_2, c2.standard_concept
-            FROM concept_relationship cr
-            JOIN concept c2 ON cr.concept_id_2 = c2.concept_id
-            WHERE cr.concept_id_1 IN :ids
-              AND cr.relationship_id = 'Maps to'
-              AND cr.invalid_reason IS NULL
-            """
-        ).bindparams(bindparam("ids", expanding=True))
-
+        # Chunk the IDs to avoid database parameter limits
+        chunk_size = 1000
+        mapping: Dict[int, int] = {}
+        
         with self._engine.connect() as connection:
-            result = connection.execute(stmt, {"ids": list(non_standard_concept_ids)})
-            mapping: Dict[int, int] = {}
-            for row in result:
-                concept_id_1, concept_id_2, standard_flag = row
-                if standard_flag == "S" and concept_id_1 not in mapping:
-                    mapping[concept_id_1] = concept_id_2
+            for i in range(0, len(non_standard_concept_ids), chunk_size):
+                chunk = list(non_standard_concept_ids)[i : i + chunk_size]
+                stmt = text(
+                    """
+                    SELECT cr.concept_id_1, cr.concept_id_2, c2.standard_concept
+                    FROM concept_relationship cr
+                    JOIN concept c2 ON cr.concept_id_2 = c2.concept_id
+                    WHERE cr.concept_id_1 IN :ids
+                      AND cr.relationship_id = 'Maps to'
+                      AND cr.invalid_reason IS NULL
+                    """
+                ).bindparams(bindparam("ids", expanding=True))
+                
+                result = connection.execute(stmt, {"ids": chunk})
+                for row in result:
+                    concept_id_1, concept_id_2, standard_flag = row
+                    if standard_flag == "S" and concept_id_1 not in mapping:
+                        mapping[concept_id_1] = concept_id_2
 
         return mapping
 

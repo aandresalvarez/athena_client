@@ -479,7 +479,8 @@ class ConceptExplorer:
         self, concept_ids: Set[int]
     ) -> List[Union[ConceptDetails, BaseException]]:
         """
-        Fetch concept details for multiple IDs concurrently.
+        Fetch concept details for multiple IDs concurrently with a semaphore
+        to prevent overwhelming the API or hitting OS limits.
 
         Args:
             concept_ids: Set of concept IDs to fetch details for
@@ -493,10 +494,18 @@ class ConceptExplorer:
         ):
             raise NotImplementedError("Async client not available")
 
+        # Use a semaphore to limit concurrency (default to 10)
+        semaphore = asyncio.Semaphore(10)
+
+        async def _wrapped_fetch(concept_id: int) -> Union[ConceptDetails, BaseException]:
+            async with semaphore:
+                try:
+                    return await self.client.get_concept_details(concept_id)
+                except Exception as e:
+                    return e
+
         # Create tasks for concurrent execution
-        tasks = [
-            self.client.get_concept_details(concept_id) for concept_id in concept_ids
-        ]
+        tasks = [_wrapped_fetch(concept_id) for concept_id in concept_ids]
 
         # Execute all tasks concurrently with exception handling
         results = await asyncio.gather(*tasks, return_exceptions=True)

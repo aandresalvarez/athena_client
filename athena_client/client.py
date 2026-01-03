@@ -8,7 +8,6 @@ import logging
 import time
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
-from .async_client import AthenaAsyncClient
 from .db.base import DatabaseConnector
 from .exceptions import APIError, AthenaError
 from .http import HttpClient
@@ -264,10 +263,17 @@ class AthenaClient:
 
                 except Exception as e:
                     if isinstance(e, APIError):
-                        # API errors are not retryable, raise immediately
-                        raise
+                        # Some API errors (like timeouts reported in the body) 
+                        # should actually be retried if we have attempts left.
+                        # Others (like invalid parameters) should be raised immediately.
+                        is_retryable = any(
+                            term in str(e).lower() 
+                            for term in ["timeout", "throttled", "rate limit", "busy"]
+                        )
+                        if not is_retryable:
+                            raise
 
-                    # For network errors, retry if we have attempts left
+                    # For network errors or retryable API errors, retry if we have attempts left
                     if attempt < max_attempts - 1:
                         logger.info(
                             f"Retrying search due to {type(e).__name__} "
@@ -340,8 +346,12 @@ class AthenaClient:
 
             except Exception as e:
                 if isinstance(e, APIError):
-                    # API errors are not retryable, raise immediately
-                    raise
+                    is_retryable = any(
+                        term in str(e).lower() 
+                        for term in ["timeout", "throttled", "rate limit", "busy"]
+                    )
+                    if not is_retryable:
+                        raise
                 elif attempt < max_attempts - 1:
                     # For other errors, retry if we have attempts left
                     logger.info(
@@ -416,8 +426,12 @@ class AthenaClient:
 
             except Exception as e:
                 if isinstance(e, APIError):
-                    # API errors are not retryable, raise immediately
-                    raise
+                    is_retryable = any(
+                        term in str(e).lower() 
+                        for term in ["timeout", "throttled", "rate limit", "busy"]
+                    )
+                    if not is_retryable:
+                        raise
                 elif attempt < max_attempts - 1:
                     # For other errors, retry if we have attempts left
                     logger.info(
@@ -627,7 +641,7 @@ class AthenaClient:
 
         return summary
 
-    async def generate_concept_set(
+    def generate_concept_set(
         self,
         query: str,
         db_connection_string: str,
@@ -636,7 +650,67 @@ class AthenaClient:
         confidence_threshold: float = 0.7,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """Generate a validated concept set using the async client."""
+        """
+        Generate a validated concept set from a search query.
+        
+        This method is synchronous and blocks until the operation is complete.
+        For asynchronous usage, use `generate_concept_set_async`.
+        """
+        import asyncio
+        
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+        if loop.is_running():
+            # If we are in a running loop (like Jupyter), we can't use asyncio.run
+            # We might need a different strategy or just warn the user.
+            # However, for simplicity in this library, we'll try to use the current loop
+            # if possible, or fallback to nest_asyncio if available (not ideal).
+            # For now, let's just use a simplified sync implementation if possible
+            # or document that it's a wrapper.
+            import threading
+            from concurrent.futures import ThreadPoolExecutor
+            
+            with ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    lambda: asyncio.run(
+                        self.generate_concept_set_async(
+                            query,
+                            db_connection_string,
+                            strategy,
+                            include_descendants,
+                            confidence_threshold,
+                            **kwargs
+                        )
+                    )
+                )
+                return future.result()
+        else:
+            return asyncio.run(
+                self.generate_concept_set_async(
+                    query,
+                    db_connection_string,
+                    strategy,
+                    include_descendants,
+                    confidence_threshold,
+                    **kwargs
+                )
+            )
+
+    async def generate_concept_set_async(
+        self,
+        query: str,
+        db_connection_string: str,
+        strategy: str = "fallback",
+        include_descendants: bool = True,
+        confidence_threshold: float = 0.7,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Generate a validated concept set asynchronously using the async client."""
+        from .async_client import AthenaAsyncClient
 
         async_client = AthenaAsyncClient(
             base_url=self.http.base_url,

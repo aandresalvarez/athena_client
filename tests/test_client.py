@@ -385,7 +385,7 @@ class TestErrorScenarios:
         # Mock the existing http client instance's get method
         athena_client.http.get = Mock(return_value=error_response)
 
-        with pytest.raises(APIError) as exc_info:
+        with pytest.raises(RetryFailedError) as exc_info:
             athena_client.search("test", max_retries=0)
 
         assert "Rate limit exceeded" in str(exc_info.value)
@@ -1349,7 +1349,7 @@ class TestDatabaseIntegration:
             client.validate_local_concepts([1])
 
     @patch("athena_client.db.sqlalchemy_connector.SQLAlchemyConnector")
-    @patch("athena_client.client.AthenaAsyncClient")
+    @patch("athena_client.async_client.AthenaAsyncClient")
     def test_generate_concept_set_facade(
         self,
         mock_async_client_class: Mock,
@@ -1367,10 +1367,8 @@ class TestDatabaseIntegration:
 
         client = AthenaClient()
 
-        result = asyncio.run(
-            client.generate_concept_set(
-                "test", "sqlite:///db", strategy="strict", include_descendants=False
-            )
+        result = client.generate_concept_set(
+            "test", "sqlite:///db", strategy="strict", include_descendants=False
         )
 
         mock_async_client_class.assert_called_once_with(

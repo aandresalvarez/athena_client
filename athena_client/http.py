@@ -5,12 +5,13 @@ This module provides HTTP clients for making requests to the Athena API,
 with features like retry, backoff, and timeout handling.
 """
 
-import json
 import logging
 import random
 import time
 from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
+import orjson
+import json
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -26,6 +27,7 @@ from .exceptions import (
     ValidationError,
 )
 from .settings import get_settings
+from .utils.user_agents import USER_AGENTS
 
 # Type variable for generic response
 T = TypeVar("T")
@@ -135,29 +137,8 @@ class HttpClient:
 
         return session
 
-    # List of browser-like User-Agents for fallback (updated to 2025 versions)
-    _USER_AGENTS = [
-        (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        (
-            "Mozilla/5.0 (X11; Linux x86_64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        ),
-        (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15"
-        ),
-        (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) "
-            "Gecko/20100101 Firefox/133.0"
-        ),
-    ]
+    # Use centralized User-Agents
+    _USER_AGENTS = USER_AGENTS
 
     def _setup_default_headers(self, user_agent_idx: int = 0) -> None:
         """Set up default headers for all requests, with optional User-Agent index."""
@@ -413,7 +394,7 @@ class HttpClient:
         url = self._build_url(path)
         body_bytes = b""
         if data is not None:
-            body_bytes = json.dumps(data).encode("utf-8")
+            body_bytes = orjson.dumps(data)
         auth_headers = build_headers(method, url, body_bytes)
         headers = dict(self.session.headers)
         headers.update(auth_headers)
