@@ -126,7 +126,15 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
                 return
 
             output_buffer = io.StringIO()
-            fieldnames = data_list[0].keys()
+            # Collect all field names from all items to ensure no fields are dropped
+            fieldnames = []
+            seen_fields = set()
+            for item in data_list:
+                for key in item.keys():
+                    if key not in seen_fields:
+                        fieldnames.append(key)
+                        seen_fields.add(key)
+
             writer = csv.DictWriter(output_buffer, fieldnames=fieldnames)
             writer.writeheader()
             for item in data_list:
@@ -278,7 +286,8 @@ def search(
     click.echo(
         "[Responsible Usage] Please avoid excessive or automated requests. "
         "Abuse may result in your IP being blocked by the Athena API provider. "
-        "Use filters and limits where possible."
+        "Use filters and limits where possible.",
+        err=True,
     )
 
     client = _create_client(

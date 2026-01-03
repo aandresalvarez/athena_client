@@ -134,7 +134,7 @@ class HttpClient:
 
         return session
 
-    # Use centralized User-Agents
+    # Use centralized User-Agents (kept as class attribute for easier testing/mocking)
     _USER_AGENTS = USER_AGENTS
 
     def _setup_default_headers(self, user_agent_idx: int = 0) -> Dict[str, str]:

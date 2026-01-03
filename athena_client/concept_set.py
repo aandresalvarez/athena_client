@@ -103,18 +103,29 @@ class ConceptSetGenerator:
                             final_ids.update(self.db.get_descendants(validated_ids))
                         
                         source_ids = list(local_mappings.keys())
+                        warnings = []
                         warning = (
                             "Initial standard concepts not found locally. "
                             "Recovered by mapping non-standard concepts "
                             f"{source_ids[:5]}{'...' if len(source_ids) > 5 else ''} "
                             "to their standard equivalents."
                         )
+                        warnings.append(warning)
+                        
+                        # Add warning if some mapped concepts failed local validation
+                        if len(validated_ids) < len(all_mapped_standard_ids):
+                            missing_count = len(all_mapped_standard_ids) - len(validated_ids)
+                            warnings.append(
+                                f"Caution: {missing_count} standard concepts found via mapping "
+                                "are missing from the local database and were excluded."
+                            )
+                            
                         return self._build_success_response(
                             query=query,
                             strategy_used="Tier 3: Recovery via Local Mapping",
                             concept_ids=list(final_ids),
                             seed_concepts=validated_ids,
-                            warnings=[warning],
+                            warnings=warnings,
                         )
                     elif all_mapped_standard_ids:
                         # Standard IDs were found via mapping but failed local validation

@@ -4,12 +4,15 @@ Pydantic models for Athena API responses.
 This module defines Pydantic models for the various responses from the Athena API.
 """
 
+import logging
 from enum import Enum
 from typing import Any, ClassVar, Dict, List, Optional, Union, cast
 
 import orjson
 from pydantic import BaseModel as PydanticBaseModel
 from pydantic import ConfigDict, Field, model_validator
+
+logger = logging.getLogger(__name__)
 
 
 def _json_dumps(value: Any, *, default: Any) -> str:
@@ -83,7 +86,13 @@ class ConceptType(str, Enum):
             "classification": cls.CLASSIFICATION,
             "non-standard": cls.NON_STANDARD,
         }
-        return mapping.get(value.strip().upper()) or mapping.get(value.strip().lower())
+        val = value.strip()
+        result = mapping.get(val.upper()) or mapping.get(val.lower())
+        
+        if result is None and val:
+            logger.warning(f"Unrecognized ConceptType shorthand: '{val}'")
+            
+        return result
 
 class InvalidReason(str, Enum):
     """Reason why a concept is invalid."""
@@ -120,7 +129,12 @@ class InvalidReason(str, Enum):
             "VALID": cls.VALID,
             "INVALID": cls.INVALID,
         }
-        return mapping.get(val_upper)
+        result = mapping.get(val_upper)
+        
+        if result is None and val:
+            logger.warning(f"Unrecognized InvalidReason shorthand: '{val}'")
+            
+        return result
 
 
 
