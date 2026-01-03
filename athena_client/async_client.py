@@ -140,6 +140,7 @@ class AsyncHttpClient:
         try:
             import sys
 
+            # Use getattr for Python versions where sys.is_finalizing is unavailable.
             if getattr(sys, "is_finalizing", lambda: False)():
                 return
             client = getattr(self, "client", None)
@@ -483,6 +484,7 @@ class AthenaAsyncClient:
         try:
             import sys
 
+            # Use getattr for Python versions where sys.is_finalizing is unavailable.
             if getattr(sys, "is_finalizing", lambda: False)():
                 return
             http = getattr(self, "http", None)

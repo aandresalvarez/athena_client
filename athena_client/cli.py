@@ -11,10 +11,13 @@ import sys
 from io import StringIO
 from typing import Any, List, Optional, cast
 
+CLICK_AVAILABLE = True
+
 try:
     import click
 except ImportError:
     click = None  # type: ignore
+    CLICK_AVAILABLE = False
 
 try:
     import rich
@@ -205,7 +208,7 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
             print(json.dumps(serializable, indent=2))
 
 
-if click:
+if CLICK_AVAILABLE:
     @click.group()
     @click.version_option(__version__)
     @click.option(
@@ -488,7 +491,7 @@ else:
 
 def main() -> None:
     """Entry point for the CLI."""
-    if click:
+    if CLICK_AVAILABLE:
         cli(obj={})  # pylint: disable=unexpected-keyword-arg
     else:
         cli()

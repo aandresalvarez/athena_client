@@ -569,6 +569,10 @@ class ConceptExplorer:
                 try:
                     return await self.client.get_concept_details(concept_id)
                 except Exception as e:
+                    logger.exception(
+                        "Error fetching concept details for concept_id %s",
+                        concept_id,
+                    )
                     return e
 
         # Create tasks for concurrent execution

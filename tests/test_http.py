@@ -379,7 +379,9 @@ class TestHttpClient:
                 result = client.request("GET", "/test")
                 assert result == {"result": "success"}
                 assert mock_request.call_count == 2
+                first_headers = mock_request.call_args_list[0][1]["headers"]
                 retry_headers = mock_request.call_args_list[1][1]["headers"]
+                assert first_headers["User-Agent"] != retry_headers["User-Agent"]
                 assert retry_headers["Origin"] == "https://athena.ohdsi.org"
                 assert retry_headers["Sec-Fetch-Site"] == "same-origin"
                 assert "Content-Type" not in retry_headers

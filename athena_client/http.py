@@ -11,7 +11,6 @@ import time
 from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
 import orjson
-import json
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -330,12 +329,7 @@ class HttpClient:
             else:
                 raise
 
-        except (
-            orjson.JSONDecodeError,
-            json.JSONDecodeError,
-            TypeError,
-            ValueError,
-        ) as e:
+        except (orjson.JSONDecodeError, TypeError, ValueError) as e:
             msg = (
                 f"Invalid JSON response from {url}: {e}. "
                 f"Raw text was: {raw_response_text[:1000]}..."

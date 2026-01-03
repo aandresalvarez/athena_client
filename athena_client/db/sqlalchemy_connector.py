@@ -13,6 +13,7 @@ except ImportError:
     SQLALCHEMY_AVAILABLE = False
 
 
+# Schema names are validated identifiers to avoid SQL injection when interpolated.
 _SCHEMA_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
