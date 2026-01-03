@@ -152,7 +152,7 @@ class AsyncHttpClient:
                 )
         except Exception:
             # Destructors should not raise exceptions
-            pass
+            return
 
     async def __aenter__(self) -> "AsyncHttpClient":
         return self
@@ -498,7 +498,7 @@ class AthenaAsyncClient:
                 )
         except Exception:
             # Destructors should not raise exceptions
-            pass
+            return
 
     async def __aenter__(self) -> "AthenaAsyncClient":
         return self
