@@ -162,14 +162,25 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
             console.print("[yellow]No results found[/yellow]")
             return
 
-        # Dynamically determine columns from first result
-        first = results[0]
-        if isinstance(first, dict):
-            columns = list(first.keys())
-        elif isinstance(first, list):
-            columns = [str(i) for i in range(len(first))]
-        else:
-            columns = [str(first)]
+        # Dynamically determine columns by collecting all keys from all results
+        # This ensures optional fields are not missed if they're absent in the first row.
+        columns = []
+        seen_cols = set()
+        # Check first 50 results or all if fewer (balanced performance vs robustness)
+        check_limit = min(50, len(results))
+        for item in results[:check_limit]:
+            if isinstance(item, dict):
+                for key in item.keys():
+                    if key not in seen_cols:
+                        columns.append(key)
+                        seen_cols.add(key)
+            elif not seen_cols:
+                # Fallback for non-dict items
+                if isinstance(item, list):
+                    columns = [str(i) for i in range(len(item))]
+                else:
+                    columns = [str(item)]
+                seen_cols.update(columns)
 
         if Table is not None:
             table = Table(title="Athena Results")

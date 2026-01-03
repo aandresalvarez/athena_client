@@ -51,6 +51,7 @@ class ExplorationState:
     max_total_concepts: int = 0  # Maximum total concepts to discover
     max_api_calls: int = 0  # Maximum API calls to make
     max_time_seconds: int = 0  # Maximum time to run exploration
+    max_concepts_per_list: int = 500  # Cap individual result lists to manage memory
 
     def __post_init__(self) -> None:
         """Initialize default values for dataclass fields."""
@@ -457,10 +458,12 @@ class ConceptExplorer:
                 # Add to appropriate result category
                 if concept.standardConcept == "Standard":
                     if concept not in state.results["synonym_matches"]:
-                        state.results["synonym_matches"].append(concept)
+                        if len(state.results["synonym_matches"]) < state.max_concepts_per_list:
+                            state.results["synonym_matches"].append(concept)
                 else:
                     if concept not in state.results["relationship_matches"]:
-                        state.results["relationship_matches"].append(concept)
+                        if len(state.results["relationship_matches"]) < state.max_concepts_per_list:
+                            state.results["relationship_matches"].append(concept)
 
                 # Add to queue for further exploration if within limits
                 if (

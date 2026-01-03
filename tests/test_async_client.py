@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
+import orjson
 import pytest
 
 from athena_client.async_client import AsyncHttpClient, AthenaAsyncClient
@@ -73,7 +74,7 @@ class TestAsyncHttpClient:
         """Test successful response handling."""
         client = AsyncHttpClient()
         response = Mock()
-        response.json.return_value = {"result": "success"}
+        response.content = orjson.dumps({"result": "success"})
 
         result = await client._handle_response(response)
         assert result == {"result": "success"}
@@ -131,7 +132,7 @@ class TestAsyncHttpClient:
         client = AsyncHttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
 
         with patch.object(
             client.client, "request", new_callable=AsyncMock, return_value=mock_response
@@ -149,7 +150,7 @@ class TestAsyncHttpClient:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.return_value = {"ok": True}
+        mock_response.content = orjson.dumps({"ok": True})
 
         with patch.object(
             client.client, "request", new_callable=AsyncMock, return_value=mock_response
@@ -171,7 +172,7 @@ class TestAsyncHttpClient:
         client = AsyncHttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
 
         with patch.object(
             client.client, "request", new_callable=AsyncMock, return_value=mock_response
@@ -190,7 +191,7 @@ class TestAsyncHttpClient:
         client = AsyncHttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
 
         with patch.object(
             client.client, "request", new_callable=AsyncMock, return_value=mock_response
@@ -212,7 +213,7 @@ class TestAsyncHttpClient:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
         mock_response.reason_phrase = "OK"
 
         with patch.object(
@@ -239,7 +240,7 @@ class TestAsyncHttpClient:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
         mock_response.reason_phrase = "OK"
 
         with patch.object(
@@ -267,7 +268,7 @@ class TestAsyncHttpClient:
         second_response = Mock()
         second_response.status_code = 200
         second_response.headers = {"Content-Type": "application/json"}
-        second_response.json.return_value = {"result": "success"}
+        second_response.content = orjson.dumps({"result": "success"})
         second_response.reason_phrase = "OK"
 
         with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
@@ -304,7 +305,7 @@ class TestAsyncHttpClient:
         second_response = Mock()
         second_response.status_code = 200
         second_response.headers = {"Content-Type": "application/json"}
-        second_response.json.return_value = {"result": "success"}
+        second_response.content = orjson.dumps({"result": "success"})
         second_response.reason_phrase = "OK"
 
         with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
@@ -624,7 +625,7 @@ class TestAthenaAsyncClient:
         resp_200 = Mock(spec=httpx.Response)
         resp_200.status_code = 200
         resp_200.headers = {"Content-Type": "application/json"}
-        resp_200.json.return_value = {"ok": True}
+        resp_200.content = orjson.dumps({"ok": True})
         resp_200.reason_phrase = "OK"
         
         # Mock the method that constructs headers

@@ -4,6 +4,7 @@ import json
 from unittest.mock import Mock, patch
 from urllib.parse import urljoin
 
+import orjson
 import pytest
 import requests
 from requests.exceptions import ConnectionError, Timeout
@@ -154,7 +155,7 @@ class TestHttpClient:
         client = HttpClient()
         response = Mock()
         response.status_code = 200
-        response.json.return_value = {"result": "success"}
+        response.content = orjson.dumps({"result": "success"})
         response.text = "success response"
 
         result = client._handle_response(response, "https://api.example.com/test")
@@ -253,7 +254,7 @@ class TestHttpClient:
         client = HttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
         mock_response.text = "success response"
         mock_response.reason = "OK"
 
@@ -269,7 +270,7 @@ class TestHttpClient:
         client = HttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
         mock_response.text = "success response"
         mock_response.reason = "OK"
 
@@ -289,7 +290,7 @@ class TestHttpClient:
         client = HttpClient()
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
         mock_response.text = "success response"
         mock_response.reason = "OK"
 
@@ -312,7 +313,7 @@ class TestHttpClient:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
         mock_response.text = "success response"
         mock_response.reason = "OK"
 
@@ -338,7 +339,7 @@ class TestHttpClient:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.json.return_value = {"result": "success"}
+        mock_response.content = orjson.dumps({"result": "success"})
         mock_response.text = "success response"
         mock_response.reason = "OK"
 
@@ -366,7 +367,7 @@ class TestHttpClient:
         second_response = Mock()
         second_response.status_code = 200
         second_response.headers = {"Content-Type": "application/json"}
-        second_response.json.return_value = {"result": "success"}
+        second_response.content = orjson.dumps({"result": "success"})
         second_response.text = "ok"
         second_response.reason = "OK"
 
@@ -401,7 +402,7 @@ class TestHttpClient:
         second_response = Mock()
         second_response.status_code = 200
         second_response.headers = {"Content-Type": "application/json"}
-        second_response.json.return_value = {"result": "success"}
+        second_response.content = orjson.dumps({"result": "success"})
         second_response.text = "ok"
         second_response.reason = "OK"
 

@@ -70,12 +70,13 @@ class ConceptType(str, Enum):
     STANDARD = "Standard"
     CLASSIFICATION = "Classification"
     NON_STANDARD = "Non-standard"
+    UNKNOWN = "Unknown"
 
     @classmethod
-    def _missing_(cls, value: object) -> Optional["ConceptType"]:
+    def _missing_(cls, value: object) -> "ConceptType":
         """Handle shorthand values from the API (S, C)."""
         if not isinstance(value, str):
-            return None
+            return cls.UNKNOWN
             
         mapping = {
             "S": cls.STANDARD,
@@ -90,9 +91,10 @@ class ConceptType(str, Enum):
         result = mapping.get(val.upper())
         
         if result is None and val:
-            logger.warning(f"Unrecognized ConceptType shorthand: '{val}'")
+            logger.warning(f"Unrecognized ConceptType shorthand: '{val}'. Mapping to UNKNOWN.")
+            return cls.UNKNOWN
             
-        return result
+        return result or cls.UNKNOWN
 
 class InvalidReason(str, Enum):
     """Reason why a concept is invalid."""
@@ -101,14 +103,15 @@ class InvalidReason(str, Enum):
     DELETED = "D"
     VALID = "V"  # Sometimes 'V' is used, though usually null
     INVALID = "Invalid"
+    UNKNOWN = "Unknown"
 
     @classmethod
-    def _missing_(cls, value: object) -> Optional["InvalidReason"]:
+    def _missing_(cls, value: object) -> "InvalidReason":
         """Handle various shorthand or null values."""
         if value is None or value == "":
-            return None
+            return cls.VALID  # Default to VALID if null or empty
         if not isinstance(value, str):
-            return None
+            return cls.UNKNOWN
             
         val = value.strip()
         val_upper = val.upper()
@@ -132,9 +135,10 @@ class InvalidReason(str, Enum):
         result = mapping.get(val_upper)
         
         if result is None and val:
-            logger.warning(f"Unrecognized InvalidReason shorthand: '{val}'")
+            logger.warning(f"Unrecognized InvalidReason shorthand: '{val}'. Mapping to UNKNOWN.")
+            return cls.UNKNOWN
             
-        return result
+        return result or cls.UNKNOWN
 
 
 

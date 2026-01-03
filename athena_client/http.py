@@ -191,27 +191,11 @@ class HttpClient:
 
     def _build_url(self, path: str) -> str:
         """
-        Build full URL by joining base URL and path.
-
-        Args:
-            path: API path
-
-        Returns:
-            Full URL
+        Build the full URL for an API endpoint.
         """
-        # Handle paths that start with / to ensure they're appended correctly
-        if path.startswith("/"):
-            # Remove the leading / and join with base_url
-            path = path[1:]
-
         # Ensure base_url doesn't end with / and path doesn't start with /
-        if self.base_url.endswith("/"):
-            base = self.base_url[:-1]
-        else:
-            base = self.base_url
-
-        if path.startswith("/"):
-            path = path[1:]
+        base = self.base_url.rstrip("/")
+        path = path.lstrip("/")
 
         full_url = f"{base}/{path}"
 
@@ -252,12 +236,6 @@ class HttpClient:
 
         Returns:
             Parsed JSON response
-
-        Raises:
-            ClientError: For 4xx status codes
-            ServerError: For 5xx status codes
-            NetworkError: For connection errors
-            APIError: For API-specific error responses
         """
         # Log raw response for debugging
         raw_response_text = response.text
@@ -266,8 +244,8 @@ class HttpClient:
         try:
             response.raise_for_status()
 
-            # Attempt to parse JSON after logging raw text
-            data = response.json()
+            # Attempt to parse JSON using orjson for better performance
+            data = orjson.loads(response.content)
             logger.debug("Successfully parsed JSON from %s", url)
             return data
 
@@ -420,10 +398,7 @@ class HttpClient:
                         f"Received redirect ({response.status_code}) to "
                         f"{response.headers.get('Location')}"
                     )
-                    last_exception = NetworkError(
-                        f"Redirected to {response.headers.get('Location')}", url=url
-                    )
-                    continue
+                    return self._handle_response(response, url)
                 if not content_type.startswith("application/json"):
                     # Only retry with fallback UA if it's a 403 or 200 (WAF block).
                     # 5xx errors should fail immediately or use standard retries.

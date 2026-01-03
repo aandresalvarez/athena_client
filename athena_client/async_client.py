@@ -140,27 +140,11 @@ class AsyncHttpClient:
 
     def _build_url(self, path: str) -> str:
         """
-        Build full URL by joining base URL and path.
-
-        Args:
-            path: API endpoint path
-
-        Returns:
-            Full URL
+        Build full URL for API request.
         """
-        # Handle paths that start with / to ensure they're appended correctly
-        if path.startswith("/"):
-            # Remove the leading / and join with base_url
-            path = path[1:]
-
         # Ensure base_url doesn't end with / and path doesn't start with /
-        if self.base_url.endswith("/"):
-            base = self.base_url[:-1]
-        else:
-            base = self.base_url
-
-        if path.startswith("/"):
-            path = path[1:]
+        base = self.base_url.rstrip("/")
+        path = path.lstrip("/")
 
         full_url = f"{base}/{path}"
 
@@ -179,15 +163,11 @@ class AsyncHttpClient:
 
         Returns:
             Parsed JSON response
-
-        Raises:
-            ClientError: For 4xx status codes
-            ServerError: For 5xx status codes
-            NetworkError: For connection errors
         """
         try:
             response.raise_for_status()
-            return response.json()
+            # Use orjson for better performance
+            return orjson.loads(response.content)
         except httpx.HTTPStatusError as e:
             if 400 <= response.status_code < 500:
                 raise ClientError(
@@ -291,7 +271,7 @@ class AsyncHttpClient:
                 content_type = response.headers.get("Content-Type", "")
                 if not content_type.startswith("application/json"):
                     # Only retry with fallback UA if it's a 403 or 200 (WAF block).
-                    # 5xx errors should fail immediately or use standard retries.
+                    # 5xx or 3xx errors should fail immediately or use standard retries.
                     if response.status_code in (403, 200):
                         logger.warning(
                             (
