@@ -1350,9 +1350,10 @@ class TestDatabaseIntegration:
         with pytest.raises(RuntimeError):
             client.validate_local_concepts([1])
 
+    @pytest.mark.asyncio
     @patch("athena_client.db.sqlalchemy_connector.SQLAlchemyConnector")
     @patch("athena_client.async_client.AthenaAsyncClient")
-    def test_generate_concept_set_facade(
+    async def test_generate_concept_set_facade(
         self,
         mock_async_client_class: Mock,
         mock_connector_class: Mock,
@@ -1371,7 +1372,7 @@ class TestDatabaseIntegration:
 
         client = AthenaClient()
 
-        result = client.generate_concept_set(
+        result = await client.generate_concept_set_async(
             "test", "sqlite:///db", strategy="strict", include_descendants=False
         )
 
