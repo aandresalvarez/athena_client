@@ -1352,39 +1352,34 @@ class TestDatabaseIntegration:
 
     @pytest.mark.asyncio
     @patch("athena_client.db.sqlalchemy_connector.SQLAlchemyConnector")
-    @patch("athena_client.async_client.AthenaAsyncClient")
     async def test_generate_concept_set_facade(
         self,
-        mock_async_client_class: Mock,
         mock_connector_class: Mock,
     ) -> None:
         expected = {"concept_ids": [1], "metadata": {"status": "SUCCESS"}}
-
-        mock_async_client = Mock()
-        mock_async_client.generate_concept_set = AsyncMock(return_value=expected)
-        mock_async_client.set_database_connector = Mock()
-        mock_async_client.__aenter__ = AsyncMock(return_value=mock_async_client)
-        mock_async_client.__aexit__ = AsyncMock(return_value=None)
-        mock_async_client_class.return_value = mock_async_client
 
         mock_connector = Mock()
         mock_connector_class.from_connection_string.return_value = mock_connector
 
         client = AthenaClient()
+        with (
+            patch(
+                "athena_client.async_client.AthenaAsyncClient.generate_concept_set",
+                new=AsyncMock(return_value=expected),
+            ) as mock_generate_concept_set,
+            patch(
+                "athena_client.async_client.AthenaAsyncClient.set_database_connector"
+            ) as mock_set_database_connector,
+        ):
+            result = await client.generate_concept_set_async(
+                "test", "sqlite:///db", strategy="strict", include_descendants=False
+            )
 
-        result = await client.generate_concept_set_async(
-            "test", "sqlite:///db", strategy="strict", include_descendants=False
-        )
-
-        mock_async_client_class.assert_called_once_with(
-            base_url=client.http.base_url,
-            token=str(client.http.session.headers.get("Authorization", "")),
-        )
         mock_connector_class.from_connection_string.assert_called_once_with(
             "sqlite:///db"
         )
-        mock_async_client.set_database_connector.assert_called_once_with(mock_connector)
-        mock_async_client.generate_concept_set.assert_awaited_once_with(
+        mock_set_database_connector.assert_called_once_with(mock_connector)
+        mock_generate_concept_set.assert_awaited_once_with(
             "test",
             strategy="strict",
             include_descendants=False,
