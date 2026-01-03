@@ -242,6 +242,16 @@ class HttpClient:
         logger.debug(f"Raw response text from {url}: {raw_response_text[:1000]}...")
 
         try:
+            if response.status_code in (301, 302, 303, 307, 308):
+                location = response.headers.get("Location")
+                redirect_note = f" to {location}" if location else ""
+                msg = (
+                    f"Unexpected redirect ({response.status_code}){redirect_note} "
+                    f"when accessing {url}. Check the API base URL."
+                )
+                logger.error(msg)
+                raise NetworkError(msg, url=url)
+
             response.raise_for_status()
 
             # Attempt to parse JSON using orjson for better performance
@@ -367,14 +377,14 @@ class HttpClient:
         for agent_idx, agent in enumerate(self._USER_AGENTS):
             if agent_idx > 0:
                 logger.info(f"Retrying with fallback User-Agent: {agent}")
-            
+
             # Compose headers for this specific attempt without modifying session state
             headers = self._setup_default_headers(user_agent_idx=agent_idx)
             headers.update(auth_headers)
             # Only add Content-Type for requests with body (POST/PUT)
             if data is not None:
                 headers["Content-Type"] = "application/json"
-            
+
             try:
                 # Use provided timeout or fall back to instance timeout
                 request_timeout = timeout if timeout is not None else self.timeout
@@ -393,36 +403,23 @@ class HttpClient:
                     return response
                 # Check for redirect loop or HTML response
                 content_type = response.headers.get("Content-Type", "")
+                is_json = content_type.startswith("application/json")
+                is_html = content_type.startswith("text/html")
                 if response.status_code in (301, 302, 303, 307, 308):
                     logger.warning(
                         f"Received redirect ({response.status_code}) to "
                         f"{response.headers.get('Location')}"
                     )
                     return self._handle_response(response, url)
-                if not content_type.startswith("application/json"):
-                    # Only retry with fallback UA if it's a 403 or 200 (WAF block).
-                    # 5xx errors should fail immediately or use standard retries.
-                    if response.status_code in (403, 200):
-                        logger.warning(f"Non-JSON response received: {content_type}")
-                        logger.debug(f"Response text: {response.text[:500]}")
-                        last_exception = NetworkError(
-                            f"Non-JSON response received: {content_type}", url=url
-                        )
-                        continue
-                    else:
-                        return self._handle_response(response, url)
-                # If 403 with JSON (rare but possible), also try next User-Agent
-                if response.status_code == 403:
-                    logger.warning(
-                        "Access forbidden (403). Retrying with different User-Agent."
-                    )
-                    last_exception = ClientError(
-                        "Access forbidden: 403 from server",
-                        status_code=response.status_code,
-                        response=response.text,
-                        url=url,
+                if response.status_code == 403 and is_html:
+                    logger.warning(f"HTML 403 received: {content_type}")
+                    logger.debug(f"Response text: {response.text[:500]}")
+                    last_exception = NetworkError(
+                        f"Non-JSON response received: {content_type}", url=url
                     )
                     continue
+                if not is_json:
+                    return self._handle_response(response, url)
                 # Try to parse JSON and handle as usual
                 return self._handle_response(response, url)
             except requests.exceptions.TooManyRedirects as e:
@@ -435,6 +432,8 @@ class HttpClient:
                 logger.exception(e)
                 last_exception = NetworkError(msg, url=url)
                 continue
+            except AthenaError:
+                raise
             except Exception as e:
                 logger.error(f"[{correlation_id}] Exception: {e}")
                 logger.exception(e)

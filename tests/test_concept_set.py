@@ -61,6 +61,34 @@ class TestConceptSetGenerator:
         assert result["metadata"]["status"] == "SUCCESS"
 
     @pytest.mark.asyncio
+    async def test_tier1_metadata_separates_source_and_validated(self):
+        explorer = Mock()
+        concept = Concept(
+            id=1,
+            name="A",
+            domain="Condition",
+            vocabulary="SNOMED",
+            className="Clinical",
+            standardConcept=ConceptType.STANDARD,
+            code="A",
+        )
+        explorer.map_to_standard_concepts = AsyncMock(
+            return_value=[{"concept": concept}]
+        )
+
+        db = Mock()
+        db.validate_concepts.return_value = [1]
+        db.get_descendants.return_value = []
+
+        generator = ConceptSetGenerator(explorer, db)
+        result = await generator.create_from_query("test")
+
+        metadata = result["metadata"]
+        assert metadata["seed_concepts"] == [1]
+        assert metadata["source_concepts"] == [1]
+        assert metadata["validated_standard_seeds"] == [1]
+
+    @pytest.mark.asyncio
     async def test_tier1_api_concept_not_in_local_db(self):
         explorer = Mock()
         concept = Concept(
@@ -198,6 +226,44 @@ class TestConceptSetGenerator:
             result["metadata"]["strategy_used"] == "Tier 3: Recovery via Local Mapping"
         )
         assert "Recovered" in result["metadata"]["warnings"][0]
+
+    @pytest.mark.asyncio
+    async def test_tier3_metadata_separates_source_and_validated(self):
+        explorer = Mock()
+        concept_a = Concept(
+            id=1,
+            name="A",
+            domain="Condition",
+            vocabulary="SNOMED",
+            className="Clinical",
+            standardConcept=ConceptType.STANDARD,
+            code="A",
+        )
+        concept_b = Concept(
+            id=2,
+            name="B",
+            domain="Condition",
+            vocabulary="SNOMED",
+            className="Clinical",
+            standardConcept=ConceptType.NON_STANDARD,
+            code="B",
+        )
+        explorer.map_to_standard_concepts = AsyncMock(
+            return_value=[{"concept": concept_a}, {"concept": concept_b}]
+        )
+
+        db = Mock()
+        db.validate_concepts.side_effect = [[], [3]]
+        db.get_standard_mapping.return_value = {2: [3]}
+        db.get_descendants.return_value = []
+
+        generator = ConceptSetGenerator(explorer, db)
+        result = await generator.create_from_query("test")
+
+        metadata = result["metadata"]
+        assert metadata["seed_concepts"] == [3]
+        assert metadata["source_concepts"] == [2]
+        assert metadata["validated_standard_seeds"] == [3]
 
     @pytest.mark.asyncio
     async def test_tier3_recovery_fails_if_mapped_is_invalid(self):

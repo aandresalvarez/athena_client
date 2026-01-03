@@ -166,9 +166,7 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
         # This ensures optional fields are not missed if they're absent in the first row.
         columns = []
         seen_cols = set()
-        # Check first 50 results or all if fewer (balanced performance vs robustness)
-        check_limit = min(50, len(results))
-        for item in results[:check_limit]:
+        for item in results:
             if isinstance(item, dict):
                 for key in item.keys():
                     if key not in seen_cols:
@@ -370,7 +368,7 @@ if click:
             ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
         )
 
-        click.echo(f"Generating concept set for '{query}'...")
+        click.echo(f"Generating concept set for '{query}'...", err=True)
 
         try:
             concept_set = client.generate_concept_set(

@@ -68,6 +68,8 @@ class ConceptSetGenerator:
                         strategy_used="Tier 1: Direct Standard Concept",
                         concept_ids=list(final_ids),
                         seed_concepts=validated_ids,
+                        source_concepts=validated_ids,
+                        validated_standard_seeds=validated_ids,
                         warnings=warnings,
                     )
 
@@ -125,6 +127,8 @@ class ConceptSetGenerator:
                             strategy_used="Tier 3: Recovery via Local Mapping",
                             concept_ids=list(final_ids),
                             seed_concepts=validated_ids,
+                            source_concepts=source_ids,
+                            validated_standard_seeds=validated_ids,
                             warnings=warnings,
                         )
                     elif all_mapped_standard_ids:
@@ -139,6 +143,11 @@ class ConceptSetGenerator:
                                 f"Standard concepts {all_mapped_standard_ids[:5]} found "
                                 "via mapping but are missing from the local database."
                             ),
+                            suggestions=[
+                                "Check if your local OMOP vocabulary is up to date.",
+                                "Ensure you have the required vocabularies loaded in your database.",
+                                "Try searching for these IDs directly in your database to debug.",
+                            ],
                         )
 
             return self._build_failure_response(
@@ -173,8 +182,18 @@ class ConceptSetGenerator:
         strategy_used: str,
         concept_ids: List[int],
         seed_concepts: List[int],
+        source_concepts: Optional[List[int]] = None,
+        validated_standard_seeds: Optional[List[int]] = None,
         warnings: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
+        resolved_source_concepts = (
+            seed_concepts if source_concepts is None else source_concepts
+        )
+        resolved_validated_seeds = (
+            seed_concepts
+            if validated_standard_seeds is None
+            else validated_standard_seeds
+        )
         return {
             "name": f"Concept Set for '{query}'",
             "concept_ids": concept_ids,
@@ -183,11 +202,20 @@ class ConceptSetGenerator:
                 "strategy_used": strategy_used,
                 "source_query": query,
                 "seed_concepts": seed_concepts,
+                "source_concepts": resolved_source_concepts,
+                "validated_standard_seeds": resolved_validated_seeds,
                 "warnings": warnings or [],
             },
         }
 
-    def _build_failure_response(self, query: str, reason: str) -> Dict[str, Any]:
+    def _build_failure_response(
+        self, query: str, reason: str, suggestions: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        default_suggestions = [
+            "Try a different search term.",
+            "Lower the `confidence_threshold`.",
+            "Check if your local vocabulary version is up to date.",
+        ]
         return {
             "name": f"Failed Concept Set for '{query}'",
             "concept_ids": [],
@@ -195,10 +223,6 @@ class ConceptSetGenerator:
                 "status": "FAILURE",
                 "source_query": query,
                 "reason": reason,
-                "suggestions": [
-                    "Try a different search term.",
-                    "Lower the `confidence_threshold`.",
-                    "Check if your local vocabulary version is up to date.",
-                ],
+                "suggestions": suggestions or default_suggestions,
             },
         }

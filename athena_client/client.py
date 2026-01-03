@@ -733,23 +733,24 @@ class AthenaClient:
         """Generate a validated concept set asynchronously using the async client."""
         from .async_client import AthenaAsyncClient
 
-        async_client = AthenaAsyncClient(
-            base_url=self.http.base_url,
-            token=str(self.http.session.headers.get("Authorization", "")),
-        )
-
         from .db.sqlalchemy_connector import SQLAlchemyConnector
 
-        db_connector = SQLAlchemyConnector.from_connection_string(db_connection_string)
-        async_client.set_database_connector(db_connector)
+        async with AthenaAsyncClient(
+            base_url=self.http.base_url,
+            token=str(self.http.session.headers.get("Authorization", "")),
+        ) as async_client:
+            db_connector = SQLAlchemyConnector.from_connection_string(
+                db_connection_string
+            )
+            async_client.set_database_connector(db_connector)
 
-        return await async_client.generate_concept_set(
-            query,
-            strategy=strategy,
-            include_descendants=include_descendants,
-            confidence_threshold=confidence_threshold,
-            **kwargs,
-        )
+            return await async_client.generate_concept_set(
+                query,
+                strategy=strategy,
+                include_descendants=include_descendants,
+                confidence_threshold=confidence_threshold,
+                **kwargs,
+            )
 
 
 class Athena(AthenaClient):

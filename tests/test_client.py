@@ -1362,6 +1362,8 @@ class TestDatabaseIntegration:
         mock_async_client = Mock()
         mock_async_client.generate_concept_set = AsyncMock(return_value=expected)
         mock_async_client.set_database_connector = Mock()
+        mock_async_client.__aenter__ = AsyncMock(return_value=mock_async_client)
+        mock_async_client.__aexit__ = AsyncMock(return_value=None)
         mock_async_client_class.return_value = mock_async_client
 
         mock_connector = Mock()
@@ -1430,6 +1432,8 @@ class TestDatabaseIntegration:
             mock_async_client = Mock()
             mock_async_client.generate_concept_set = AsyncMock(return_value=expected)
             mock_async_client.set_database_connector = Mock()
+            mock_async_client.__aenter__ = AsyncMock(return_value=mock_async_client)
+            mock_async_client.__aexit__ = AsyncMock(return_value=None)
             mock_async_client_class.return_value = mock_async_client
             
             with patch("athena_client.db.sqlalchemy_connector.SQLAlchemyConnector") as mock_connector_class:

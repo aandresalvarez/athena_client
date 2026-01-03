@@ -165,6 +165,19 @@ class AsyncHttpClient:
             Parsed JSON response
         """
         try:
+            if response.status_code in (301, 302, 303, 307, 308):
+                location = response.headers.get("Location")
+                redirect_note = f" to {location}" if location else ""
+                request_url = (
+                    str(response.request.url) if response.request is not None else ""
+                )
+                msg = (
+                    f"Unexpected redirect ({response.status_code}){redirect_note} "
+                    f"when accessing {request_url}. Check the API base URL."
+                )
+                logger.error(msg)
+                raise NetworkError(msg, url=request_url)
+
             response.raise_for_status()
             # Use orjson for better performance
             return orjson.loads(response.content)
@@ -240,7 +253,7 @@ class AsyncHttpClient:
         for agent_idx, agent in enumerate(self._USER_AGENTS):
             if agent_idx > 0:
                 logger.info(f"Retrying with fallback User-Agent: {agent}")
-            
+
             headers = self._compose_request_headers(
                 auth_headers,
                 agent_idx,
@@ -269,34 +282,21 @@ class AsyncHttpClient:
 
                 # Validate content type is JSON
                 content_type = response.headers.get("Content-Type", "")
-                if not content_type.startswith("application/json"):
-                    # Only retry with fallback UA if it's a 403 or 200 (WAF block).
-                    # 5xx or 3xx errors should fail immediately or use standard retries.
-                    if response.status_code in (403, 200):
-                        logger.warning(
-                            (
-                                "Non-JSON response received: "
-                                f"{content_type}; trying next User-Agent"
-                            )
-                        )
-                        last_exception = NetworkError(
-                            f"Non-JSON response received: {content_type}",
-                        )
-                        continue
-                    else:
-                        return await self._handle_response(response)
-
-                # If 403 with JSON (rare but possible), also try next User-Agent
-                if response.status_code == 403:
+                is_json = content_type.startswith("application/json")
+                is_html = content_type.startswith("text/html")
+                if response.status_code == 403 and is_html:
                     logger.warning(
-                        "Access forbidden (403). Retrying with different User-Agent."
+                        (
+                            "Non-JSON response received: "
+                            f"{content_type}; trying next User-Agent"
+                        )
                     )
-                    last_exception = ClientError(
-                        "Access forbidden: 403 from server",
-                        status_code=response.status_code,
-                        response=response.text,
+                    last_exception = NetworkError(
+                        f"Non-JSON response received: {content_type}",
                     )
                     continue
+                if not is_json:
+                    return await self._handle_response(response)
 
                 return await self._handle_response(response)
 
@@ -321,6 +321,7 @@ class AsyncHttpClient:
         path: str,
         params: Optional[Dict[str, Any]] = None,
         raw_response: bool = False,
+        timeout: Optional[int] = None,
     ) -> Union[Dict[str, Any], httpx.Response]:
         """
         Make a GET request to the Athena API.
@@ -329,11 +330,22 @@ class AsyncHttpClient:
             path: API endpoint path
             params: Query parameters
             raw_response: Whether to return the raw response object
+            timeout: Optional timeout override for this request
 
         Returns:
             Parsed JSON response or raw Response object
         """
-        return await self.request("GET", path, params=params, raw_response=raw_response)
+        if timeout is None:
+            return await self.request(
+                "GET", path, params=params, raw_response=raw_response
+            )
+        return await self.request(
+            "GET",
+            path,
+            params=params,
+            raw_response=raw_response,
+            timeout=timeout,
+        )
 
     async def post(
         self,
@@ -541,7 +553,7 @@ class AthenaAsyncClient:
         search_kwargs: Dict[str, Any] = dict(kwargs)
         search_kwargs["page_size"] = size
         search_kwargs["page"] = page
-        
+
         # Use dynamic timeout if not explicitly provided in kwargs
         if "timeout" not in search_kwargs:
             search_kwargs["timeout"] = operation_timeout

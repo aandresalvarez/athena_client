@@ -394,10 +394,10 @@ class TestHttpClient:
 
         client = HttpClient()
         first_response = Mock()
-        first_response.status_code = 200
+        first_response.status_code = 403
         first_response.headers = {"Content-Type": "text/html"}
         first_response.text = "blocked"
-        first_response.reason = "OK"
+        first_response.reason = "Forbidden"
 
         second_response = Mock()
         second_response.status_code = 200

@@ -2,6 +2,7 @@
 Tests for ConceptExplorer functionality.
 """
 
+import asyncio
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -348,6 +349,28 @@ class TestConceptExplorer:
         assert self.mock_client.relationships.call_count >= 0
 
     @pytest.mark.asyncio
+    async def test_record_discovered_id_waits_for_lock(self):
+        """Ensure discovery lock prevents concurrent writes until released."""
+        explorer = ConceptExplorer(Mock())
+        state = ExplorationState()
+        state.discovery_lock = asyncio.Lock()
+        state.max_total_concepts = 5
+        ids_to_fetch = set()
+
+        await state.discovery_lock.acquire()
+        task = asyncio.create_task(
+            explorer._record_discovered_id(42, state, ids_to_fetch)
+        )
+
+        await asyncio.sleep(0)
+        assert ids_to_fetch == set()
+
+        state.discovery_lock.release()
+        await task
+
+        assert ids_to_fetch == {42}
+
+    @pytest.mark.asyncio
     async def test_process_batch_results_sync_client(self, mock_concept_details):
         """Test batch results processing with sync client."""
         state = ExplorationState()
@@ -377,6 +400,45 @@ class TestConceptExplorer:
         # get_concept_details may not be called if ids_to_fetch is empty
         # or already visited
         assert async_client.get_concept_details.call_count >= 0
+
+    @pytest.mark.asyncio
+    async def test_process_batch_results_respects_total_concepts_limit(self):
+        """Test batch processing truncates to remaining concept slots."""
+        async_client = Mock()
+        explorer = ConceptExplorer(async_client)
+
+        state = ExplorationState()
+        state.start_time = asyncio.get_event_loop().time()
+        state.max_time_seconds = 10
+        state.max_api_calls = 10
+        state.max_total_concepts = 2
+        state.visited_ids = {1}
+
+        ids_to_fetch = {2, 3, 4}
+
+        async def fake_get_details(concept_ids):
+            assert len(concept_ids) == 1
+            return [
+                ConceptDetails(
+                    id=concept_id,
+                    name=f"Concept {concept_id}",
+                    domainId="Condition",
+                    vocabularyId="SNOMED",
+                    conceptClassId="Clinical Finding",
+                    standardConcept=ConceptType.STANDARD,
+                    conceptCode=str(concept_id),
+                    validStart="2020-01-01",
+                    validEnd="2099-12-31",
+                )
+                for concept_id in concept_ids
+            ]
+
+        explorer._get_details_batch_async = AsyncMock(side_effect=fake_get_details)
+
+        await explorer._process_batch_results(ids_to_fetch, state, 1, None)
+
+        assert len(state.visited_ids) == state.max_total_concepts
+        assert 2 in state.visited_ids
 
     @pytest.mark.asyncio
     async def test_get_details_batch_async(self, mock_concept_details):

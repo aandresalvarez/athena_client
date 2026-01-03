@@ -297,10 +297,10 @@ class TestAsyncHttpClient:
 
         client = AsyncHttpClient()
         first_response = Mock()
-        first_response.status_code = 200
+        first_response.status_code = 403
         first_response.headers = {"Content-Type": "text/html"}
         first_response.text = "blocked"
-        first_response.reason_phrase = "OK"
+        first_response.reason_phrase = "Forbidden"
 
         second_response = Mock()
         second_response.status_code = 200
@@ -382,6 +382,22 @@ class TestAsyncHttpClient:
             await client.get("/test", params={"key": "value"})
             mock_request.assert_called_once_with(
                 "GET", "/test", params={"key": "value"}, raw_response=False
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_method_with_timeout(self) -> None:
+        """Test GET method with a timeout override."""
+        client = AsyncHttpClient()
+
+        with patch.object(client, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = {"result": "success"}
+            await client.get("/test", params={"key": "value"}, timeout=10)
+            mock_request.assert_called_once_with(
+                "GET",
+                "/test",
+                params={"key": "value"},
+                raw_response=False,
+                timeout=10,
             )
 
     @pytest.mark.asyncio
