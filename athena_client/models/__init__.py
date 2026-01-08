@@ -131,6 +131,8 @@ class InvalidReason(str, Enum):
             "DELETED": cls.DELETED,
             "VALID": cls.VALID,
             "INVALID": cls.INVALID,
+            "UPGRADED": cls.UPDATED,
+            "DEPRECATED": cls.DELETED,
         }
         result = mapping.get(val_upper)
         
