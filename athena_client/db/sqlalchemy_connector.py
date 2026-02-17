@@ -46,18 +46,18 @@ class SQLAlchemyConnector:
         # Chunk the IDs to avoid database parameter limits
         chunk_size = 1000
         validated_ids = []
-        
+
         with self._engine.connect() as connection:
             for i in range(0, len(concept_ids), chunk_size):
                 chunk = list(concept_ids)[i : i + chunk_size]
                 # Table names are validated identifiers.
                 query = f"""
                         SELECT concept_id
-                        FROM {self._qualified_table('concept')}
+                        FROM {self._qualified_table("concept")}
                         WHERE concept_id IN :ids AND standard_concept = 'S'
                         """  # nosec B608
                 stmt = text(query).bindparams(bindparam("ids", expanding=True))
-                
+
                 result = connection.execute(stmt, {"ids": chunk})
                 validated_ids.extend([row[0] for row in result])
 
@@ -71,18 +71,18 @@ class SQLAlchemyConnector:
         # Chunk the IDs to avoid database parameter limits
         chunk_size = 1000
         descendant_ids = []
-        
+
         with self._engine.connect() as connection:
             for i in range(0, len(concept_ids), chunk_size):
                 chunk = list(concept_ids)[i : i + chunk_size]
                 # Table names are validated identifiers.
                 query = f"""
                         SELECT descendant_concept_id
-                        FROM {self._qualified_table('concept_ancestor')}
+                        FROM {self._qualified_table("concept_ancestor")}
                         WHERE ancestor_concept_id IN :ids
                         """  # nosec B608
                 stmt = text(query).bindparams(bindparam("ids", expanding=True))
-                
+
                 result = connection.execute(stmt, {"ids": chunk})
                 descendant_ids.extend([row[0] for row in result])
 
@@ -98,22 +98,22 @@ class SQLAlchemyConnector:
         # Chunk the IDs to avoid database parameter limits
         chunk_size = 1000
         mapping: Dict[int, List[int]] = {}
-        
+
         with self._engine.connect() as connection:
             for i in range(0, len(non_standard_concept_ids), chunk_size):
                 chunk = list(non_standard_concept_ids)[i : i + chunk_size]
                 # Table names are validated identifiers.
                 query = f"""
                     SELECT cr.concept_id_1, cr.concept_id_2, c2.standard_concept
-                    FROM {self._qualified_table('concept_relationship')} cr
-                    JOIN {self._qualified_table('concept')} c2
+                    FROM {self._qualified_table("concept_relationship")} cr
+                    JOIN {self._qualified_table("concept")} c2
                       ON cr.concept_id_2 = c2.concept_id
                     WHERE cr.concept_id_1 IN :ids
                       AND cr.relationship_id = 'Maps to'
                       AND cr.invalid_reason IS NULL
                     """  # nosec B608
                 stmt = text(query).bindparams(bindparam("ids", expanding=True))
-                
+
                 result = connection.execute(stmt, {"ids": chunk})
                 for row in result:
                     concept_id_1, concept_id_2, standard_flag = row

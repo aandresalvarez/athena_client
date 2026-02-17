@@ -136,9 +136,7 @@ class TestExplorationState:
         visited_ids = {1, 2}
         results = {"test": "value"}
 
-        state = ExplorationState(
-            queue=queue, visited_ids=visited_ids, results=results
-        )
+        state = ExplorationState(queue=queue, visited_ids=visited_ids, results=results)
 
         assert state.queue == queue
         assert state.visited_ids == visited_ids

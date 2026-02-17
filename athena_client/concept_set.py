@@ -94,16 +94,16 @@ class ConceptSetGenerator:
                 )
                 if local_mappings:
                     # Collect all standard IDs from all mappings
-                    all_mapped_standard_ids = []
+                    all_mapped_standard_ids: List[int] = []
                     for mapped_ids in local_mappings.values():
                         all_mapped_standard_ids.extend(mapped_ids)
-                    
+
                     validated_ids = self.db.validate_concepts(all_mapped_standard_ids)
                     if validated_ids:
                         final_ids = set(validated_ids)
                         if include_descendants:
                             final_ids.update(self.db.get_descendants(validated_ids))
-                        
+
                         source_ids = list(local_mappings.keys())
                         warnings = []
                         warning = (
@@ -113,15 +113,18 @@ class ConceptSetGenerator:
                             "to their standard equivalents."
                         )
                         warnings.append(warning)
-                        
+
                         # Add warning if some mapped concepts failed local validation
                         if len(validated_ids) < len(all_mapped_standard_ids):
-                            missing_count = len(all_mapped_standard_ids) - len(validated_ids)
+                            missing_count = len(all_mapped_standard_ids) - len(
+                                validated_ids
+                            )
                             warnings.append(
-                                f"Caution: {missing_count} standard concepts found via mapping "
+                                f"Caution: {missing_count} standard concepts found "
+                                "via mapping "
                                 "are missing from the local database and were excluded."
                             )
-                            
+
                         return self._build_success_response(
                             query=query,
                             strategy_used="Tier 3: Recovery via Local Mapping",
@@ -132,21 +135,24 @@ class ConceptSetGenerator:
                             warnings=warnings,
                         )
                     elif all_mapped_standard_ids:
-                        # Standard IDs were found via mapping but failed local validation
+                        # Standard IDs were found via mapping but failed
+                        # local validation.
                         logger.warning(
-                            "Mapping found standard IDs %s but none were valid in local DB.",
+                            "Mapping found standard IDs %s but none "
+                            "were valid in local DB.",
                             all_mapped_standard_ids[:10],
                         )
                         return self._build_failure_response(
                             query,
-                            (
-                                f"Standard concepts {all_mapped_standard_ids[:5]} found "
-                                "via mapping but are missing from the local database."
-                            ),
+                            f"Standard concepts {all_mapped_standard_ids[:5]} "
+                            "found via mapping but are missing "
+                            "from the local database.",
                             suggestions=[
                                 "Check if your local OMOP vocabulary is up to date.",
-                                "Ensure you have the required vocabularies loaded in your database.",
-                                "Try searching for these IDs directly in your database to debug.",
+                                "Ensure required vocabularies are loaded "
+                                "in your database.",
+                                "Try searching for these IDs directly in your "
+                                "database to debug.",
                             ],
                         )
 

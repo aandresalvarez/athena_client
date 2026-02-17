@@ -29,7 +29,7 @@ def get_sqlalchemy_connector() -> type:
         require_optional_package("sqlalchemy", "database operations", "db", err)
 
 
-__version__ = "1.0.32"
+__version__ = "1.0.33"
 
 __all__ = [
     "Athena",

@@ -495,9 +495,7 @@ class ConceptExplorer:
         if remaining_slots <= 0:
             return
         if len(ids_to_fetch_details) > remaining_slots:
-            ids_to_fetch_details = set(
-                sorted(ids_to_fetch_details)[:remaining_slots]
-            )
+            ids_to_fetch_details = set(sorted(ids_to_fetch_details)[:remaining_slots])
 
         try:
             # Batch fetch concept details
@@ -530,11 +528,17 @@ class ConceptExplorer:
                 # Add to appropriate result category
                 if concept.standardConcept == "Standard":
                     if concept not in state.results["synonym_matches"]:
-                        if len(state.results["synonym_matches"]) < state.max_concepts_per_list:
+                        if (
+                            len(state.results["synonym_matches"])
+                            < state.max_concepts_per_list
+                        ):
                             state.results["synonym_matches"].append(concept)
                 else:
                     if concept not in state.results["relationship_matches"]:
-                        if len(state.results["relationship_matches"]) < state.max_concepts_per_list:
+                        if (
+                            len(state.results["relationship_matches"])
+                            < state.max_concepts_per_list
+                        ):
                             state.results["relationship_matches"].append(concept)
 
                 await self._record_visited_concept(concept, state, next_depth)
@@ -564,7 +568,9 @@ class ConceptExplorer:
         # Use a semaphore to limit concurrency (default to 10)
         semaphore = asyncio.Semaphore(10)
 
-        async def _wrapped_fetch(concept_id: int) -> Union[ConceptDetails, BaseException]:
+        async def _wrapped_fetch(
+            concept_id: int,
+        ) -> Union[ConceptDetails, BaseException]:
             async with semaphore:
                 try:
                     return await self.client.get_concept_details(concept_id)

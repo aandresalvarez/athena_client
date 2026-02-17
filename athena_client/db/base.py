@@ -14,6 +14,6 @@ class DatabaseConnector(Protocol):
 
     def get_standard_mapping(
         self, non_standard_concept_ids: List[int]
-    ) -> Dict[int, int]:
+    ) -> Dict[int, List[int]]:
         """Return mapping from non-standard to standard concept IDs."""
         ...

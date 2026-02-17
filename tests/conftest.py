@@ -24,9 +24,7 @@ def pytest_configure(config: pytest.Config) -> None:
     AsyncHttpClient.__init__ = _tracking_async_http_init  # type: ignore[assignment]
 
 
-def pytest_sessionfinish(
-    session: pytest.Session, exitstatus: int
-) -> None:
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     if not _ASYNC_HTTP_CLIENTS:
         return
 

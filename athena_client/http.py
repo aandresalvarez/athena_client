@@ -7,8 +7,10 @@ with features like retry, backoff, and timeout handling.
 
 import logging
 import random
+import threading
 import time
 from typing import Any, Dict, Optional, Tuple, TypeVar, Union
+from urllib.parse import ParseResult, urlparse
 
 import orjson
 import requests
@@ -96,6 +98,8 @@ class HttpClient:
 
         # Create session with retry configuration
         self.session = self._create_session()
+        self._athena_session_initialized = self._has_athena_session_cookie()
+        self._athena_session_seed_lock = threading.Lock()
 
         logger.debug("HttpClient initialized with base URL: %s", self.base_url)
 
@@ -139,6 +143,66 @@ class HttpClient:
     def _setup_default_headers(self, user_agent_idx: int = 0) -> Dict[str, str]:
         """Set up default headers for all requests, with optional User-Agent index."""
         return get_default_headers(user_agent_idx=user_agent_idx)
+
+    def _parse_base_url(self) -> ParseResult:
+        """Parse base URL, tolerating schemeless values.
+
+        If a URL is provided without a scheme (e.g. ``athena.ohdsi.org/api/v1``),
+        this normalizes it to https for host matching and seed URL generation.
+        """
+        parsed = urlparse(self.base_url)
+        if parsed.scheme and parsed.netloc:
+            return parsed
+
+        return urlparse(f"https://{self.base_url}")
+
+    def _is_athena_host(self) -> bool:
+        """Return True when the current base URL points to athena.ohdsi.org."""
+        parsed = self._parse_base_url()
+        hostname = parsed.hostname or ""
+        return hostname == "athena.ohdsi.org" or hostname.endswith(".athena.ohdsi.org")
+
+    def _has_athena_session_cookie(self) -> bool:
+        """Return True when the client session already has an athena_session cookie."""
+        return any(cookie.name == "athena_session" for cookie in self.session.cookies)
+
+    def _search_terms_url(self) -> str:
+        """Return the public web page URL used to initialize session cookies."""
+        if self._is_athena_host():
+            parsed = self._parse_base_url()
+            return f"{parsed.scheme or 'https'}://{parsed.hostname}/search-terms/terms"
+
+        return self._build_url("/search-terms/terms")
+
+    def _seed_athena_session(self) -> bool:
+        """
+        Hit the public web page to establish an athena_session cookie.
+        """
+        if self._athena_session_initialized or not self._is_athena_host():
+            return self._athena_session_initialized
+
+        with self._athena_session_seed_lock:
+            if self._athena_session_initialized or not self._is_athena_host():
+                return self._athena_session_initialized
+
+            search_url = self._search_terms_url()
+            try:
+                response = self.session.get(
+                    search_url,
+                    headers=self._setup_default_headers(),
+                    timeout=self.timeout,
+                )
+                logger.debug(
+                    "Session bootstrap request to %s returned %s",
+                    search_url,
+                    response.status_code,
+                )
+                if response.status_code == 200 and self._has_athena_session_cookie():
+                    self._athena_session_initialized = True
+            except requests.RequestException as e:
+                logger.warning("Failed to seed Athena session: %s", e)
+
+        return self._athena_session_initialized
 
     def _throttle_request(self) -> None:
         """
@@ -411,6 +475,8 @@ class HttpClient:
                     )
                     return self._handle_response(response, url)
                 if response.status_code == 403 and is_html:
+                    if self._is_athena_host() and not self._athena_session_initialized:
+                        self._seed_athena_session()
                     logger.warning(f"HTML 403 received: {content_type}")
                     logger.debug(f"Response text: {response.text[:500]}")
                     last_exception = NetworkError(
