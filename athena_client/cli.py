@@ -4,12 +4,14 @@ Command-line interface for the Athena client.
 This module provides a CLI for interacting with the Athena API.
 """
 
-import asyncio
-import csv
 import json
+import asyncio
 import sys
-from io import StringIO
 from typing import Any, List, Optional, cast
+
+from athena_client.models import Concept
+
+from . import Athena, __version__
 
 CLICK_AVAILABLE = True
 
@@ -22,8 +24,8 @@ except ImportError:
 try:
     import rich
     from rich.console import Console
-    from rich.table import Table
     from rich.syntax import Syntax
+    from rich.table import Table
 except ImportError:
     rich = None  # type: ignore
     Console = None  # type: ignore
@@ -34,10 +36,6 @@ try:
     import yaml
 except ImportError:
     yaml = None  # type: ignore
-
-from athena_client.models import Concept
-
-from . import Athena, __version__
 
 
 def _create_client(
@@ -165,8 +163,9 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
             console.print("[yellow]No results found[/yellow]")
             return
 
-        # Dynamically determine columns by collecting all keys from all results
-        # This ensures optional fields are not missed if they're absent in the first row.
+        # Dynamically determine columns by collecting all keys
+        # from all results. This ensures optional fields are not missed
+        # if absent in the first row.
         columns = []
         seen_cols = set()
         for item in results:
@@ -208,7 +207,10 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
             print(json.dumps(serializable, indent=2))
 
 
+cli: Any
+
 if CLICK_AVAILABLE:
+
     @click.group()
     @click.version_option(__version__)
     @click.option(
@@ -263,10 +265,12 @@ if CLICK_AVAILABLE:
         else:
             ctx.obj["console"] = None
 
-    @cli.command()
+    @cli.command()  # type: ignore[misc]
     @click.argument("query")
     @click.option("--fuzzy/--no-fuzzy", default=False, help="Enable fuzzy matching")
-    @click.option("--page-size", type=int, default=20, help="Number of results per page")
+    @click.option(
+        "--page-size", type=int, default=20, help="Number of results per page"
+    )
     @click.option("--page", type=int, default=0, help="Page number (0-indexed)")
     @click.option(
         "--limit",
@@ -303,7 +307,10 @@ if CLICK_AVAILABLE:
         )
 
         client = _create_client(
-            ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
+            ctx.obj["base_url"],
+            ctx.obj["token"],
+            ctx.obj["timeout"],
+            ctx.obj["retries"],
         )
 
         # If limit is set and less than page_size, use limit for page_size.
@@ -338,7 +345,7 @@ if CLICK_AVAILABLE:
         output_format = output or ctx.obj.get("output", "table")
         _format_output(output_data, output_format, ctx.obj.get("console"))
 
-    @cli.command(name="generate-set")
+    @cli.command(name="generate-set")  # type: ignore[misc]
     @click.argument("query")
     @click.option(
         "--db-connection",
@@ -368,7 +375,10 @@ if CLICK_AVAILABLE:
         """Generate a validated concept set for a given query."""
 
         client = _create_client(
-            ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
+            ctx.obj["base_url"],
+            ctx.obj["token"],
+            ctx.obj["timeout"],
+            ctx.obj["retries"],
         )
 
         click.echo(f"Generating concept set for '{query}'...", err=True)
@@ -385,8 +395,9 @@ if CLICK_AVAILABLE:
 
             metadata = concept_set.get("metadata", {})
             if metadata.get("status") == "SUCCESS":
+                concept_count = len(concept_set.get("concept_ids", []))
                 click.secho(
-                    f"\nSuccess! Found {len(concept_set.get('concept_ids', []))} concepts.",
+                    f"\nSuccess! Found {concept_count} concepts.",
                     fg="green",
                     err=True,
                 )
@@ -414,19 +425,22 @@ if CLICK_AVAILABLE:
             )
             sys.exit(1)
 
-    @cli.command()
+    @cli.command()  # type: ignore[misc]
     @click.argument("concept_id", type=int)
     @click.pass_context
     def details(ctx: Any, concept_id: int) -> None:
         """Get detailed information for a specific concept."""
         client = _create_client(
-            ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
+            ctx.obj["base_url"],
+            ctx.obj["token"],
+            ctx.obj["timeout"],
+            ctx.obj["retries"],
         )
 
         result = client.details(concept_id)
         _format_output(result, ctx.obj["output"], ctx.obj.get("console"))
 
-    @cli.command()
+    @cli.command()  # type: ignore[misc]
     @click.argument("concept_id", type=int)
     @click.option("--relationship-id", help="Filter by relationship type")
     @click.option(
@@ -441,21 +455,29 @@ if CLICK_AVAILABLE:
     ) -> None:
         """Get relationships for a specific concept."""
         client = _create_client(
-            ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
+            ctx.obj["base_url"],
+            ctx.obj["token"],
+            ctx.obj["timeout"],
+            ctx.obj["retries"],
         )
 
         result = client.relationships(concept_id)
         _format_output(result, ctx.obj["output"], ctx.obj.get("console"))
 
-    @cli.command()
+    @cli.command()  # type: ignore[misc]
     @click.argument("concept_id", type=int)
-    @click.option("--depth", type=int, default=10, help="Maximum depth of relationships")
+    @click.option(
+        "--depth", type=int, default=10, help="Maximum depth of relationships"
+    )
     @click.option("--zoom-level", type=int, default=4, help="Zoom level for the graph")
     @click.pass_context
     def graph(ctx: Any, concept_id: int, depth: int, zoom_level: int) -> None:
         """Get relationship graph for a specific concept."""
         client = _create_client(
-            ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
+            ctx.obj["base_url"],
+            ctx.obj["token"],
+            ctx.obj["timeout"],
+            ctx.obj["retries"],
         )
 
         result = client.graph(
@@ -465,13 +487,16 @@ if CLICK_AVAILABLE:
         )
         _format_output(result, ctx.obj["output"], ctx.obj.get("console"))
 
-    @cli.command()
+    @cli.command()  # type: ignore[misc]
     @click.argument("concept_id", type=int)
     @click.pass_context
     def summary(ctx: Any, concept_id: int) -> None:
         """Get a comprehensive summary for a concept."""
         client = _create_client(
-            ctx.obj["base_url"], ctx.obj["token"], ctx.obj["timeout"], ctx.obj["retries"]
+            ctx.obj["base_url"],
+            ctx.obj["token"],
+            ctx.obj["timeout"],
+            ctx.obj["retries"],
         )
 
         result = client.summary(concept_id)
@@ -484,7 +509,7 @@ else:
         print(
             "The 'click' package is required for the CLI. "
             "Install with: pip install 'athena-client[cli]'",
-            file=sys.stderr
+            file=sys.stderr,
         )
         sys.exit(1)
 
