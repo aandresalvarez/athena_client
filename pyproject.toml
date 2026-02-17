@@ -159,6 +159,10 @@ quality = [
   "bandit-check",
 ]
 [tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+]
+filterwarnings = [
+    "ignore:.*asyncio_default_fixture_loop_scope.*is unset.*:pytest.PytestDeprecationWarning",
 ]

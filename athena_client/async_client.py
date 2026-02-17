@@ -10,6 +10,7 @@ import asyncio
 import logging
 import random
 from typing import Any, Dict, Optional, Tuple, Union, cast
+from urllib.parse import ParseResult, urlparse
 
 import orjson
 
@@ -107,6 +108,8 @@ class AsyncHttpClient:
 
         # Create httpx client
         self.client = httpx.AsyncClient(timeout=self.timeout)
+        self._athena_session_initialized = self._has_athena_session_cookie()
+        self._athena_session_seed_lock = asyncio.Lock()
 
     # Use centralized User-Agents (kept as class attribute for easier testing/mocking)
     _USER_AGENTS = USER_AGENTS
@@ -114,6 +117,68 @@ class AsyncHttpClient:
     def _setup_default_headers(self, user_agent_idx: int = 0) -> Dict[str, str]:
         """Set up default headers for all requests, with optional User-Agent index."""
         return get_default_headers(user_agent_idx=user_agent_idx)
+
+    def _parse_base_url(self) -> ParseResult:
+        """Parse base URL, tolerating schemeless values."""
+        parsed = urlparse(self.base_url)
+        if parsed.scheme and parsed.netloc:
+            return parsed
+
+        return urlparse(f"https://{self.base_url}")
+
+    def _is_athena_host(self) -> bool:
+        """Return True when the current base URL points to athena.ohdsi.org."""
+        parsed = self._parse_base_url()
+        hostname = parsed.hostname or ""
+        return hostname == "athena.ohdsi.org" or hostname.endswith(".athena.ohdsi.org")
+
+    def _has_athena_session_cookie(self) -> bool:
+        """Return True when the client cookie jar already has an
+        athena_session value.
+        """
+        try:
+            return self.client.cookies.get("athena_session") is not None
+        except Exception:
+            return False
+
+    def _search_terms_url(self) -> str:
+        """Return the public web page URL used to establish session cookies."""
+        if self._is_athena_host():
+            parsed = self._parse_base_url()
+            return f"{parsed.scheme or 'https'}://{parsed.hostname}/search-terms/terms"
+
+        return self._build_url("/search-terms/terms")
+
+    async def _seed_athena_session(self) -> bool:
+        """
+        Hit the public web page to establish an athena_session cookie.
+        """
+        if self._athena_session_initialized or not self._is_athena_host():
+            return self._athena_session_initialized
+
+        async with self._athena_session_seed_lock:
+            if self._athena_session_initialized or not self._is_athena_host():
+                return self._athena_session_initialized
+
+            try:
+                search_url = self._search_terms_url()
+                response = await self.client.get(
+                    search_url,
+                    headers=self._setup_default_headers(),
+                    timeout=self.timeout,
+                    follow_redirects=True,
+                )
+                logger.debug(
+                    "Session bootstrap request to %s returned %s",
+                    search_url,
+                    response.status_code,
+                )
+                if response.status_code == 200 and self._has_athena_session_cookie():
+                    self._athena_session_initialized = True
+            except httpx.RequestError as exc:
+                logger.warning("Failed to seed Athena session: %s", exc)
+
+        return self._athena_session_initialized
 
     async def _throttle_request(self) -> None:
         """
@@ -149,7 +214,8 @@ class AsyncHttpClient:
             if not getattr(client, "is_closed", True):
                 logger.warning(
                     "AsyncHttpClient was not closed. "
-                    "Use 'async with' or call 'await client.aclose()' to avoid leaking resources."
+                    "Use 'async with' or call 'await client.aclose()' "
+                    "to avoid leaking resources."
                 )
         except Exception:
             # Destructors should not raise exceptions
@@ -322,6 +388,8 @@ class AsyncHttpClient:
                 is_json = content_type.startswith("application/json")
                 is_html = content_type.startswith("text/html")
                 if response.status_code == 403 and is_html:
+                    if self._is_athena_host() and not self._athena_session_initialized:
+                        await self._seed_athena_session()
                     logger.warning(
                         (
                             "Non-JSON response received: "
@@ -496,7 +564,8 @@ class AthenaAsyncClient:
             if not getattr(client, "is_closed", True):
                 logger.warning(
                     "AthenaAsyncClient was not closed. "
-                    "Use 'async with' or call 'await client.aclose()' to avoid leaking resources."
+                    "Use 'async with' or call 'await client.aclose()' "
+                    "to avoid leaking resources."
                 )
         except Exception:
             # Destructors should not raise exceptions
@@ -626,7 +695,7 @@ class AthenaAsyncClient:
 
         response_data = await self.search_concepts(query=query_str, **search_kwargs)
         response = ConceptSearchResponse.model_validate(response_data)
-        return SearchResult(response, self, query=query, **kwargs)
+        return SearchResult(response, self, query=query_str, **kwargs)
 
     async def details(self, concept_id: int) -> ConceptDetails:
         """
@@ -676,6 +745,7 @@ class AthenaAsyncClient:
             ConceptDetails object
         """
         from .utils import get_operation_timeout
+
         timeout = get_operation_timeout("details", 1)
         response = await self.http.get(f"/concepts/{concept_id}", timeout=timeout)
         data = cast(Dict[str, Any], response)
@@ -706,6 +776,7 @@ class AthenaAsyncClient:
             params["standardConcepts"] = "true"
 
         from .utils import get_operation_timeout
+
         timeout = get_operation_timeout("relationships", 1)
         response = await self.http.get(
             f"/concepts/{concept_id}/relationships", params=params, timeout=timeout
@@ -732,6 +803,7 @@ class AthenaAsyncClient:
         """
         params = {"depth": depth, "zoomLevel": zoom_level}
         from .utils import get_operation_timeout
+
         # Use depth and zoom to estimate complexity
         estimated_complexity = depth * zoom_level * 5
         timeout = get_operation_timeout("graph", estimated_complexity)

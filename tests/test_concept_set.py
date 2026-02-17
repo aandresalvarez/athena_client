@@ -212,12 +212,12 @@ class TestConceptSetGenerator:
         explorer.map_to_standard_concepts = AsyncMock(
             return_value=[{"concept": concept_a}, {"concept": concept_b}]
         )
-    
+
         db = Mock()
         db.validate_concepts.side_effect = [[], [3]]
         db.get_standard_mapping.return_value = {2: [3]}
         db.get_descendants.return_value = [4]
-    
+
         generator = ConceptSetGenerator(explorer, db)
         result = await generator.create_from_query("test")
 
@@ -289,11 +289,11 @@ class TestConceptSetGenerator:
         explorer.map_to_standard_concepts = AsyncMock(
             return_value=[{"concept": concept_a}, {"concept": concept_b}]
         )
-    
+
         db = Mock()
         db.validate_concepts.side_effect = [[], []]
         db.get_standard_mapping.return_value = {2: [3]}
-    
+
         generator = ConceptSetGenerator(explorer, db)
         result = await generator.create_from_query("test")
 
@@ -327,7 +327,7 @@ class TestConceptSetGenerator:
     @pytest.mark.asyncio
     async def test_concept_set_mapping_multiple_standards_regression(self):
         """
-        Regression test: ensure that a non-standard concept mapping to 
+        Regression test: ensure that a non-standard concept mapping to
         MULTIPLE standard concepts results in all standard concepts being included.
         """
         explorer = Mock()
@@ -343,17 +343,17 @@ class TestConceptSetGenerator:
         explorer.map_to_standard_concepts = AsyncMock(
             return_value=[{"concept": non_standard_concept}]
         )
-        
+
         db = Mock()
         # Mock local_mappings to return two standard IDs for ID 1
         db.get_standard_mapping.return_value = {1: [100, 101]}
         # Both standard IDs are validated
         db.validate_concepts.return_value = [100, 101]
         db.get_descendants.return_value = []
-        
+
         generator = ConceptSetGenerator(explorer, db)
         result = await generator.create_from_query("test")
-        
+
         assert result["metadata"]["status"] == "SUCCESS"
         assert 100 in result["concept_ids"]
         assert 101 in result["concept_ids"]

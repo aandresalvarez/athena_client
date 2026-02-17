@@ -166,7 +166,8 @@ class Q:
         Returns:
             Dictionary with query boosts
         """
-        def _as_list(value: Any) -> list:
+
+        def _as_list(value: Any) -> list[Any]:
             if value is None:
                 return []
             if isinstance(value, list):
@@ -174,8 +175,8 @@ class Q:
             return [value]
 
         def _extract_mergeable_bool(
-            filter_dict: Dict[str, Any]
-        ) -> Optional[Dict[str, list]]:
+            filter_dict: Dict[str, Any],
+        ) -> Optional[Dict[str, list[Any]]]:
             bool_clause = filter_dict.get("bool")
             if not isinstance(bool_clause, dict):
                 return None
@@ -299,6 +300,6 @@ class Q:
                 if not val.startswith('"') or not val.endswith('"'):
                     val = f'"{val}"'
                 return val
-            # For term, exact, wildcard, we use the value as is 
+            # For term, exact, wildcard, we use the value as is
             # (exact and wildcard already add quotes/patterns in their classmethods)
             return self.value

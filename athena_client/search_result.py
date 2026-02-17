@@ -6,10 +6,13 @@ convenient access to the data in various formats.
 """
 
 import asyncio
+import warnings
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional
 
 try:
-    import pandas as pd
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        import pandas as pd
 
     PANDAS_AVAILABLE = True
 except ImportError:
@@ -107,7 +110,7 @@ class SearchResult:
         size = self._response.size
         if current_page is None or size is None:
             return None
-            
+
         # Clean kwargs to avoid "multiple values for argument" error
         search_kwargs = self._kwargs.copy()
         for key in ["page", "size", "pageSize", "page_size", "limit", "start"]:
@@ -144,12 +147,12 @@ class SearchResult:
         size = self._response.size
         if current_page is None or size is None:
             return None
-            
+
         # Clean kwargs to avoid "multiple values for argument" error
         search_kwargs = self._kwargs.copy()
         for key in ["page", "size", "pageSize", "page_size", "limit", "start"]:
             search_kwargs.pop(key, None)
-            
+
         return await self._client.search(
             query=self._query or "",
             page=current_page + 1,
@@ -169,7 +172,7 @@ class SearchResult:
         size = self._response.size
         if current_page is None or size is None:
             return None
-            
+
         # Clean kwargs to avoid "multiple values for argument" error
         search_kwargs = self._kwargs.copy()
         for key in ["page", "size", "pageSize", "page_size", "limit", "start"]:
@@ -206,12 +209,12 @@ class SearchResult:
         size = self._response.size
         if current_page is None or size is None:
             return None
-            
+
         # Clean kwargs to avoid "multiple values for argument" error
         search_kwargs = self._kwargs.copy()
         for key in ["page", "size", "pageSize", "page_size", "limit", "start"]:
             search_kwargs.pop(key, None)
-            
+
         return await self._client.search(
             query=self._query or "",
             page=current_page - 1,

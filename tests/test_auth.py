@@ -192,7 +192,7 @@ class TestAuth:
 
     def test_hmac_nonce_uniqueness_regression(self):
         """
-        Regression test: nonces should be unique even when generated 
+        Regression test: nonces should be unique even when generated
         within the same microsecond (simulated here by same timestamp).
         """
         with patch("athena_client.auth.get_settings") as mock_get_settings:
@@ -203,27 +203,48 @@ class TestAuth:
                 "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----"
             )
             mock_get_settings.return_value = mock_settings
-            
+
             mock_datetime = Mock()
             # Same timestamp for both calls
-            mock_datetime.now.return_value.strftime.return_value = "2023-01-01T00:00:00.000000"
-            
+            mock_datetime.now.return_value.strftime.return_value = (
+                "2023-01-01T00:00:00.000000"
+            )
+
             mock_serialization = Mock()
             mock_key = Mock()
             mock_serialization.load_pem_private_key.return_value = mock_key
-            
+
             with (
                 patch("athena_client.auth.datetime", mock_datetime),
-                patch("athena_client.auth.b64encode", return_value=Mock(decode=lambda: "sig")),
+                patch(
+                    "athena_client.auth.b64encode",
+                    return_value=Mock(decode=lambda: "sig"),
+                ),
             ):
-                headers1 = build_headers("GET", "https://api.com/1", b"", serialization_module=mock_serialization, hashes_module=Mock())
-                headers2 = build_headers("GET", "https://api.com/2", b"", serialization_module=mock_serialization, hashes_module=Mock())
-                
+                headers1 = build_headers(
+                    "GET",
+                    "https://api.com/1",
+                    b"",
+                    serialization_module=mock_serialization,
+                    hashes_module=Mock(),
+                )
+                headers2 = build_headers(
+                    "GET",
+                    "https://api.com/2",
+                    b"",
+                    serialization_module=mock_serialization,
+                    hashes_module=Mock(),
+                )
+
                 # Nonces must be different even if timestamp is the same
                 assert headers1["X-Athena-Nonce"] != headers2["X-Athena-Nonce"]
                 # They should both start with the same timestamp though
-                assert headers1["X-Athena-Nonce"].startswith("2023-01-01T00:00:00.000000")
-                assert headers2["X-Athena-Nonce"].startswith("2023-01-01T00:00:00.000000")
+                assert headers1["X-Athena-Nonce"].startswith(
+                    "2023-01-01T00:00:00.000000"
+                )
+                assert headers2["X-Athena-Nonce"].startswith(
+                    "2023-01-01T00:00:00.000000"
+                )
 
     def test_build_headers_hmac_cryptography_import_error(self):
         """Test HMAC authentication when cryptography is not available."""

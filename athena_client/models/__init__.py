@@ -77,7 +77,7 @@ class ConceptType(str, Enum):
         """Handle shorthand values from the API (S, C)."""
         if not isinstance(value, str):
             return cls.UNKNOWN
-            
+
         mapping = {
             "S": cls.STANDARD,
             "C": cls.CLASSIFICATION,
@@ -89,12 +89,15 @@ class ConceptType(str, Enum):
         }
         val = value.strip()
         result = mapping.get(val.upper())
-        
+
         if result is None and val:
-            logger.warning(f"Unrecognized ConceptType shorthand: '{val}'. Mapping to UNKNOWN.")
+            logger.warning(
+                f"Unrecognized ConceptType shorthand: '{val}'. Mapping to UNKNOWN."
+            )
             return cls.UNKNOWN
-            
+
         return result or cls.UNKNOWN
+
 
 class InvalidReason(str, Enum):
     """Reason why a concept is invalid."""
@@ -112,10 +115,10 @@ class InvalidReason(str, Enum):
             return cls.VALID  # Default to VALID if null or empty
         if not isinstance(value, str):
             return cls.UNKNOWN
-            
+
         val = value.strip()
         val_upper = val.upper()
-        
+
         if val_upper == "U":
             return cls.UPDATED
         if val_upper == "D":
@@ -124,7 +127,7 @@ class InvalidReason(str, Enum):
             return cls.VALID
         if val.lower() == "invalid":
             return cls.INVALID
-        
+
         # Handle full names if they appear
         mapping = {
             "UPDATED": cls.UPDATED,
@@ -135,13 +138,14 @@ class InvalidReason(str, Enum):
             "DEPRECATED": cls.DELETED,
         }
         result = mapping.get(val_upper)
-        
-        if result is None and val:
-            logger.warning(f"Unrecognized InvalidReason shorthand: '{val}'. Mapping to UNKNOWN.")
-            return cls.UNKNOWN
-            
-        return result or cls.UNKNOWN
 
+        if result is None and val:
+            logger.warning(
+                f"Unrecognized InvalidReason shorthand: '{val}'. Mapping to UNKNOWN."
+            )
+            return cls.UNKNOWN
+
+        return result or cls.UNKNOWN
 
 
 class Concept(BaseModel):

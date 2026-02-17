@@ -1,6 +1,7 @@
 """
-Centralized User-Agent strings and header construction for the Athena client to avoid duplication
-and ensure consistency between sync and async implementations.
+Centralized User-Agent strings and header construction for the Athena
+client to avoid duplication and ensure consistency between sync and
+async implementations.
 """
 
 from typing import Dict
