@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "athena-client"
-version = "1.0.32"
+version = "1.0.33"
 description = "An unofficial Python SDK for interacting with the OHDSI Athena Concepts API."
 readme = "README.md"
 requires-python = ">=3.9"
