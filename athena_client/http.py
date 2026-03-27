@@ -187,9 +187,26 @@ class HttpClient:
 
             search_url = self._search_terms_url()
             try:
+                # Use browser-navigation headers so the server treats this as
+                # a normal page visit and sets the athena_session cookie.
+                # The default API headers (Accept: application/json,
+                # Sec-Fetch-Mode: cors) get rejected with 403 before the
+                # session cookie exists.
+                nav_headers = {
+                    "User-Agent": self._USER_AGENTS[0],
+                    "Accept": (
+                        "text/html,application/xhtml+xml,"
+                        "application/xml;q=0.9,*/*;q=0.8"
+                    ),
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Dest": "document",
+                    "Connection": "keep-alive",
+                }
                 response = self.session.get(
                     search_url,
-                    headers=self._setup_default_headers(),
+                    headers=nav_headers,
                     timeout=self.timeout,
                 )
                 logger.debug(
