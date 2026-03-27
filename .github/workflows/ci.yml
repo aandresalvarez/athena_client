@@ -12,7 +12,7 @@ jobs:
         with:
           python-version: '3.9'
       - name: Install Hatch
-        run: pip install hatch
+        run: pip install "hatch" "virtualenv<21.2"
       - name: Install Bandit
         run: pip install bandit
       - name: Install dev deps
@@ -38,7 +38,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           # allow-prereleases removed (no 3.14 pre-release testing for now)
       - name: Install Hatch
-        run: pip install hatch
+        run: pip install "hatch" "virtualenv<21.2"
       - name: Install dev deps
         run: hatch env create
       - name: Install optional dependencies for testing
