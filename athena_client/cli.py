@@ -5,7 +5,6 @@ This module provides a CLI for interacting with the Athena API.
 """
 
 import json
-import asyncio
 import sys
 from typing import Any, List, Optional, cast
 
