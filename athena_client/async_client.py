@@ -28,6 +28,11 @@ except ImportError as err:
         "backoff is required for the async client. Install with 'pip install backoff'"
     ) from err
 
+from .athena_session import (
+    ATHENA_JS_SESSION_COOKIE_NAME,
+    create_athena_js_session,
+    is_athena_js_session_current,
+)
 from .auth import build_headers
 from .concept_explorer import create_concept_explorer
 from .concept_set import ConceptSetGenerator
@@ -108,8 +113,7 @@ class AsyncHttpClient:
 
         # Create httpx client
         self.client = httpx.AsyncClient(timeout=self.timeout)
-        self._athena_session_initialized = self._has_athena_session_cookie()
-        self._athena_session_seed_lock = asyncio.Lock()
+        self._athena_session_cookie_lock = asyncio.Lock()
 
     # Use centralized User-Agents (kept as class attribute for easier testing/mocking)
     _USER_AGENTS = USER_AGENTS
@@ -132,70 +136,49 @@ class AsyncHttpClient:
         hostname = parsed.hostname or ""
         return hostname == "athena.ohdsi.org" or hostname.endswith(".athena.ohdsi.org")
 
-    def _has_athena_session_cookie(self) -> bool:
-        """Return True when the client cookie jar already has an
-        athena_session value.
-        """
-        try:
-            return self.client.cookies.get("athena_session") is not None
-        except Exception:
+    def _athena_js_session_value(self) -> Optional[str]:
+        """Return the current Athena JavaScript cookie value, if present."""
+        for cookie in self.client.cookies.jar:
+            if cookie.name == ATHENA_JS_SESSION_COOKIE_NAME:
+                return cookie.value
+        return None
+
+    async def _ensure_athena_js_session(
+        self,
+        user_agent: str,
+        *,
+        force: bool = False,
+        rejected_value: Optional[str] = None,
+    ) -> bool:
+        """Create or refresh Athena's JavaScript cookie when required."""
+        if not self._is_athena_host():
             return False
 
-    def _search_terms_url(self) -> str:
-        """Return the public web page URL used to establish session cookies."""
-        if self._is_athena_host():
-            parsed = self._parse_base_url()
-            return f"{parsed.scheme or 'https'}://{parsed.hostname}/search-terms/terms"
+        async with self._athena_session_cookie_lock:
+            current_value = self._athena_js_session_value()
+            if (
+                force
+                and rejected_value is not None
+                and current_value is not None
+                and current_value != rejected_value
+            ):
+                return False
+            if not force and is_athena_js_session_current(current_value):
+                return False
 
-        return self._build_url("/search-terms/terms")
+            hostname = self._parse_base_url().hostname
+            if hostname is None:
+                return False
 
-    async def _seed_athena_session(self) -> bool:
-        """
-        Hit the public web page to establish an athena_session cookie.
-        """
-        if self._athena_session_initialized or not self._is_athena_host():
-            return self._athena_session_initialized
-
-        async with self._athena_session_seed_lock:
-            if self._athena_session_initialized or not self._is_athena_host():
-                return self._athena_session_initialized
-
-            try:
-                search_url = self._search_terms_url()
-                # Use browser-navigation headers so the server treats this as
-                # a normal page visit and sets the athena_session cookie.
-                # The default API headers (Accept: application/json,
-                # Sec-Fetch-Mode: cors) get rejected with 403 before the
-                # session cookie exists.
-                nav_headers = {
-                    "User-Agent": self._USER_AGENTS[0],
-                    "Accept": (
-                        "text/html,application/xhtml+xml,"
-                        "application/xml;q=0.9,*/*;q=0.8"
-                    ),
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "Sec-Fetch-Site": "none",
-                    "Sec-Fetch-Mode": "navigate",
-                    "Sec-Fetch-Dest": "document",
-                    "Connection": "keep-alive",
-                }
-                response = await self.client.get(
-                    search_url,
-                    headers=nav_headers,
-                    timeout=self.timeout,
-                    follow_redirects=True,
-                )
-                logger.debug(
-                    "Session bootstrap request to %s returned %s",
-                    search_url,
-                    response.status_code,
-                )
-                if response.status_code == 200 and self._has_athena_session_cookie():
-                    self._athena_session_initialized = True
-            except httpx.RequestError as exc:
-                logger.warning("Failed to seed Athena session: %s", exc)
-
-        return self._athena_session_initialized
+            cookie_value = create_athena_js_session(user_agent)
+            self.client.cookies.set(
+                ATHENA_JS_SESSION_COOKIE_NAME,
+                cookie_value,
+                domain=hostname,
+                path="/",
+            )
+            logger.debug("Created a fresh %s cookie", ATHENA_JS_SESSION_COOKIE_NAME)
+            return True
 
     async def _throttle_request(self) -> None:
         """
@@ -367,8 +350,11 @@ class AsyncHttpClient:
         logger.debug(f"[{correlation_id}] {method} {url}")
 
         await self._throttle_request()
+        await self._ensure_athena_js_session(self._USER_AGENTS[0])
+        request_cookie_value = self._athena_js_session_value()
 
         last_exception: Optional[Exception] = None
+        session_refresh_attempted = False
         # Try with multiple browser-like User-Agents if needed
         for agent_idx, agent in enumerate(self._USER_AGENTS):
             if agent_idx > 0:
@@ -404,9 +390,36 @@ class AsyncHttpClient:
                 content_type = response.headers.get("Content-Type", "")
                 is_json = content_type.startswith("application/json")
                 is_html = content_type.startswith("text/html")
+                if (
+                    response.status_code == 403
+                    and is_html
+                    and self._is_athena_host()
+                    and not session_refresh_attempted
+                ):
+                    session_refresh_attempted = True
+                    await self._ensure_athena_js_session(
+                        agent,
+                        force=True,
+                        rejected_value=request_cookie_value,
+                    )
+                    response = await self.client.request(
+                        method=method,
+                        url=url,
+                        params=params,
+                        content=body_bytes if data is not None else None,
+                        headers=headers,
+                        timeout=request_timeout,
+                    )
+                    content_type = response.headers.get("Content-Type", "")
+                    is_json = content_type.startswith("application/json")
+                    is_html = content_type.startswith("text/html")
+                    logger.debug(
+                        "[%s] Retried with a fresh %s cookie; received %s",
+                        correlation_id,
+                        ATHENA_JS_SESSION_COOKIE_NAME,
+                        response.status_code,
+                    )
                 if response.status_code == 403 and is_html:
-                    if self._is_athena_host() and not self._athena_session_initialized:
-                        await self._seed_athena_session()
                     logger.warning(
                         (
                             "Non-JSON response received: "

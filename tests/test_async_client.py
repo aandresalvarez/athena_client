@@ -1,5 +1,6 @@
 """Tests for the async client module."""
 
+import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
@@ -289,11 +290,10 @@ class TestAsyncHttpClient:
     async def test_request_waf_403_html_retry_regression(
         self, mock_build_headers: Mock
     ) -> None:
-        """Regression test for issue #15: HTML 403 should trigger UA fallback."""
+        """HTML 403 should refresh the cookie and retry the same request."""
         mock_build_headers.return_value = {}
 
         client = AsyncHttpClient()
-        client._athena_session_initialized = True
         first_response = Mock()
         first_response.status_code = 403
         first_response.headers = {"Content-Type": "text/html"}
@@ -316,7 +316,9 @@ class TestAsyncHttpClient:
                 result = await client.request("GET", "/test")
                 assert result == {"result": "success"}
                 assert mock_request.call_count == 2
+                first_headers = mock_request.call_args_list[0][1]["headers"]
                 retry_headers = mock_request.call_args_list[1][1]["headers"]
+                assert first_headers["User-Agent"] == retry_headers["User-Agent"]
                 normalized_headers = {
                     key.lower(): value for key, value in retry_headers.items()
                 }
@@ -329,7 +331,7 @@ class TestAsyncHttpClient:
     async def test_request_bootstraps_session_on_html_403(
         self, mock_build_headers: Mock
     ) -> None:
-        """HTML 403 on API should bootstrap Athena web session before retrying."""
+        """HTML 403 should not require a separate webpage bootstrap request."""
         mock_build_headers.return_value = {}
 
         client = AsyncHttpClient()
@@ -338,57 +340,6 @@ class TestAsyncHttpClient:
         first_response.headers = {"Content-Type": "text/html"}
         first_response.text = "<html>Forbidden</html>"
         first_response.reason_phrase = "Forbidden"
-
-        bootstrap_response = Mock()
-        bootstrap_response.status_code = 200
-        bootstrap_response.headers = {"Content-Type": "text/html;charset=ISO-8859-1"}
-        bootstrap_response.text = "<!DOCTYPE html>"
-
-        second_response = Mock()
-        second_response.status_code = 200
-        second_response.headers = {"Content-Type": "application/json"}
-        second_response.content = orjson.dumps({"result": "success"})
-        second_response.reason_phrase = "OK"
-
-        with patch.object(client, "_has_athena_session_cookie", return_value=True):
-            with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
-                with patch.object(
-                    client.client,
-                    "request",
-                    new_callable=AsyncMock,
-                    side_effect=[first_response, bootstrap_response, second_response],
-                ) as mock_request:
-                    result = await client.request("GET", "/test")
-                    assert result == {"result": "success"}
-                    assert mock_request.call_count == 3
-                    bootstrap_call = mock_request.call_args_list[1]
-                    assert bootstrap_call[0][0] == "GET"
-                    assert (
-                        bootstrap_call[0][1]
-                        == "https://athena.ohdsi.org/search-terms/terms"
-                    )
-                    assert client._athena_session_initialized is True
-
-    @patch("athena_client.async_client.build_headers")
-    @pytest.mark.asyncio
-    async def test_request_bootstrap_200_without_session_cookie_keeps_retrying(
-        self, mock_build_headers: Mock
-    ) -> None:
-        """Bootstrap 200 without session cookie should not mark
-        session as initialized."""
-        mock_build_headers.return_value = {}
-
-        client = AsyncHttpClient()
-        first_response = Mock()
-        first_response.status_code = 403
-        first_response.headers = {"Content-Type": "text/html"}
-        first_response.text = "<html>Forbidden</html>"
-        first_response.reason_phrase = "Forbidden"
-
-        bootstrap_response = Mock()
-        bootstrap_response.status_code = 200
-        bootstrap_response.headers = {"Content-Type": "text/html;charset=ISO-8859-1"}
-        bootstrap_response.text = "<!DOCTYPE html>"
 
         second_response = Mock()
         second_response.status_code = 200
@@ -397,22 +348,54 @@ class TestAsyncHttpClient:
         second_response.reason_phrase = "OK"
 
         with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
+            with patch(
+                "athena_client.async_client.create_athena_js_session",
+                return_value="20261010_feedface",
+            ):
+                with patch.object(
+                    client.client,
+                    "request",
+                    new_callable=AsyncMock,
+                    side_effect=[first_response, second_response],
+                ) as mock_request:
+                    result = await client.request("GET", "/test")
+                    assert result == {"result": "success"}
+                    assert mock_request.call_count == 2
+                    assert all(
+                        call_args[1]["url"] == "https://athena.ohdsi.org/api/v1/test"
+                        for call_args in mock_request.call_args_list
+                    )
+                    assert client._athena_js_session_value() == "20261010_feedface"
+
+    @patch("athena_client.async_client.build_headers")
+    @pytest.mark.asyncio
+    async def test_request_creates_missing_js_session_cookie(
+        self, mock_build_headers: Mock
+    ) -> None:
+        """A missing JavaScript cookie should be created before the API call."""
+        mock_build_headers.return_value = {}
+
+        client = AsyncHttpClient()
+        response = Mock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "application/json"}
+        response.content = orjson.dumps({"result": "success"})
+        response.reason_phrase = "OK"
+
+        with patch(
+            "athena_client.async_client.create_athena_js_session",
+            return_value="20261010_feedface",
+        ):
             with patch.object(
                 client.client,
                 "request",
                 new_callable=AsyncMock,
-                side_effect=[first_response, bootstrap_response, second_response],
+                return_value=response,
             ) as mock_request:
                 result = await client.request("GET", "/test")
                 assert result == {"result": "success"}
-                assert mock_request.call_count == 3
-                bootstrap_call = mock_request.call_args_list[1]
-                assert bootstrap_call[0][0] == "GET"
-                assert (
-                    bootstrap_call[0][1]
-                    == "https://athena.ohdsi.org/search-terms/terms"
-                )
-                assert client._athena_session_initialized is False
+                assert mock_request.call_count == 1
+                assert client._athena_js_session_value() == "20261010_feedface"
 
     @patch("athena_client.async_client.build_headers")
     @pytest.mark.asyncio
@@ -457,113 +440,48 @@ class TestAsyncHttpClient:
     async def test_request_bootstraps_session_with_schemaless_base_url(
         self, mock_build_headers: Mock
     ) -> None:
-        """Schemaless Athena base URL should still bootstrap to the web entrypoint."""
+        """A schemaless Athena URL should still receive the JavaScript cookie."""
         mock_build_headers.return_value = {}
 
         client = AsyncHttpClient(base_url="athena.ohdsi.org/api/v1")
-        first_response = Mock()
-        first_response.status_code = 403
-        first_response.headers = {"Content-Type": "text/html"}
-        first_response.text = "<html>Forbidden</html>"
-        first_response.reason_phrase = "Forbidden"
-
-        bootstrap_response = Mock()
-        bootstrap_response.status_code = 200
-        bootstrap_response.headers = {"Content-Type": "text/html;charset=ISO-8859-1"}
-        bootstrap_response.text = "<!DOCTYPE html>"
-
-        second_response = Mock()
-        second_response.status_code = 200
-        second_response.headers = {"Content-Type": "application/json"}
-        second_response.content = orjson.dumps({"result": "success"})
-        second_response.reason_phrase = "OK"
-
-        with patch.object(
-            client,
-            "_has_athena_session_cookie",
-            return_value=True,
+        with patch(
+            "athena_client.async_client.create_athena_js_session",
+            return_value="20261010_feedface",
         ):
-            with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
-                with patch.object(
-                    client.client,
-                    "request",
-                    new_callable=AsyncMock,
-                    side_effect=[first_response, bootstrap_response, second_response],
-                ) as mock_request:
-                    result = await client.request("GET", "/test")
-                    assert result == {"result": "success"}
-                    bootstrap_call = mock_request.call_args_list[1]
-                    assert (
-                        bootstrap_call[0][1]
-                        == "https://athena.ohdsi.org/search-terms/terms"
-                    )
+            created = await client._ensure_athena_js_session("agent1")
 
-    @patch("athena_client.async_client.build_headers")
+        assert created
+        assert client._is_athena_host()
+        assert client._athena_js_session_value() == "20261010_feedface"
+
     @pytest.mark.asyncio
-    async def test_concurrent_requests_seed_session_only_once(
-        self, mock_build_headers: Mock
-    ) -> None:
-        """Concurrent 403 bursts should seed session only once per client."""
-        mock_build_headers.return_value = {}
-        import asyncio
-
+    async def test_concurrent_cookie_refresh_happens_only_once(self) -> None:
+        """Concurrent rejections of one cookie should trigger one refresh."""
         client = AsyncHttpClient()
-        first_response = Mock()
-        first_response.status_code = 403
-        first_response.headers = {"Content-Type": "text/html"}
-        first_response.text = "Forbidden"
-        first_response.reason_phrase = "Forbidden"
+        await client._ensure_athena_js_session("agent1")
+        rejected_value = client._athena_js_session_value()
+        assert rejected_value is not None
 
-        bootstrap_response = Mock()
-        bootstrap_response.status_code = 200
-        bootstrap_response.headers = {"Content-Type": "text/html;charset=ISO-8859-1"}
-        bootstrap_response.text = "<!DOCTYPE html>"
+        with patch(
+            "athena_client.async_client.create_athena_js_session",
+            return_value="20261010_feedface",
+        ) as create_cookie:
+            refresh_results = await asyncio.gather(
+                client._ensure_athena_js_session(
+                    "agent1",
+                    force=True,
+                    rejected_value=rejected_value,
+                ),
+                client._ensure_athena_js_session(
+                    "agent1",
+                    force=True,
+                    rejected_value=rejected_value,
+                ),
+            )
 
-        second_response = Mock()
-        second_response.status_code = 200
-        second_response.headers = {"Content-Type": "application/json"}
-        second_response.content = orjson.dumps({"ok": True})
-        second_response.reason_phrase = "OK"
-
-        calls = {"req1": 0, "req2": 0}
-
-        async def side_effect(method: str, url: str, **_: object) -> Mock:
-            if "/search-terms/terms" in url:
-                if not client.client.cookies.get("athena_session"):
-                    client.client.cookies.set(
-                        "athena_session", "session", domain="athena.ohdsi.org"
-                    )
-                return bootstrap_response
-            if "/req1" in url:
-                calls["req1"] += 1
-            elif "/req2" in url:
-                calls["req2"] += 1
-
-            if "/req1" in url and calls["req1"] <= 1:
-                return first_response
-            if "/req2" in url and calls["req2"] <= 1:
-                return first_response
-            return second_response
-
-        with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
-            with patch.object(
-                client.client,
-                "request",
-                new_callable=AsyncMock,
-                side_effect=side_effect,
-            ) as mock_request:
-                task1 = asyncio.create_task(client.request("GET", "/req1"))
-                task2 = asyncio.create_task(client.request("GET", "/req2"))
-                await asyncio.gather(task1, task2)
-
-                assert calls["req1"] == 2
-                assert calls["req2"] == 2
-                bootstrap_calls = [
-                    c
-                    for c in mock_request.call_args_list
-                    if "/search-terms/terms" in str(c[0] + (c[1].get("url", ""),))
-                ]
-                assert len(bootstrap_calls) == 1
+        assert sorted(refresh_results) == [False, True]
+        create_cookie.assert_called_once_with("agent1")
+        assert client._athena_js_session_value() == "20261010_feedface"
 
     @patch("athena_client.async_client.build_headers")
     @pytest.mark.asyncio
@@ -574,7 +492,6 @@ class TestAsyncHttpClient:
         mock_build_headers.return_value = {}
 
         client = AsyncHttpClient()
-        client._athena_session_initialized = True
         first_response = Mock()
         first_response.status_code = 403
         first_response.headers = {"Content-Type": "text/html"}
@@ -906,10 +823,9 @@ class TestAthenaAsyncClient:
     async def test_async_http_client_header_race_condition_regression(self):
         """
         Regression test: Concurrent requests should not interfere with each other's
-        headers when one triggers a User-Agent rotation.
+        headers when one triggers a cookie refresh.
         """
         client = AsyncHttpClient()
-        client._athena_session_initialized = True
 
         # Mock responses distinguishing requests by path
         resp_403 = Mock(spec=httpx.Response)
@@ -971,8 +887,7 @@ class TestAthenaAsyncClient:
                         # Request 2 should ALWAYS have UA1 because it never retried
                         assert ua == "UA1", f"Request 2 used wrong UA: {ua}"
                     elif "/req1" in url:
-                        # Request 1 should have UA1 on first call and
-                        # UA2 on second.
+                        # A cookie refresh retries with the same User-Agent.
                         # We already verified this implicitly by checking all calls.
                         pass
 
@@ -982,7 +897,7 @@ class TestAthenaAsyncClient:
                 ]
                 assert len(req1_calls) == 2
                 assert req1_calls[0][1]["headers"]["User-Agent"] == "UA1"
-                assert req1_calls[1][1]["headers"]["User-Agent"] == "UA2"
+                assert req1_calls[1][1]["headers"]["User-Agent"] == "UA1"
 
     @pytest.mark.asyncio
     async def test_search_uses_dynamic_timeout_regression(self):

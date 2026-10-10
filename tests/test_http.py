@@ -351,11 +351,10 @@ class TestHttpClient:
     def test_request_waf_403_html_retry_regression(
         self, mock_build_headers: Mock
     ) -> None:
-        """Regression test for issue #15: HTML 403 should trigger UA fallback."""
+        """HTML 403 should refresh the cookie and retry the same request."""
         mock_build_headers.return_value = {}
 
         client = HttpClient()
-        client._athena_session_initialized = True
         first_response = Mock()
         first_response.status_code = 403
         first_response.headers = {"Content-Type": "text/html"}
@@ -370,26 +369,31 @@ class TestHttpClient:
         second_response.reason = "OK"
 
         with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
-            with patch.object(
-                client.session,
-                "request",
-                side_effect=[first_response, second_response],
-            ) as mock_request:
-                result = client.request("GET", "/test")
-                assert result == {"result": "success"}
-                assert mock_request.call_count == 2
-                first_headers = mock_request.call_args_list[0][1]["headers"]
-                retry_headers = mock_request.call_args_list[1][1]["headers"]
-                assert first_headers["User-Agent"] != retry_headers["User-Agent"]
-                assert retry_headers["Origin"] == "https://athena.ohdsi.org"
-                assert retry_headers["Sec-Fetch-Site"] == "same-origin"
-                assert "Content-Type" not in retry_headers
+            with patch(
+                "athena_client.http.create_athena_js_session",
+                return_value="20261010_feedface",
+            ):
+                with patch.object(
+                    client.session,
+                    "request",
+                    side_effect=[first_response, second_response],
+                ) as mock_request:
+                    result = client.request("GET", "/test")
+                    assert result == {"result": "success"}
+                    assert mock_request.call_count == 2
+                    first_headers = mock_request.call_args_list[0][1]["headers"]
+                    retry_headers = mock_request.call_args_list[1][1]["headers"]
+                    assert first_headers["User-Agent"] == retry_headers["User-Agent"]
+                    assert retry_headers["Origin"] == "https://athena.ohdsi.org"
+                    assert retry_headers["Sec-Fetch-Site"] == "same-origin"
+                    assert "Content-Type" not in retry_headers
+                    assert client._athena_js_session_value() == "20261010_feedface"
 
     @patch("athena_client.http.build_headers")
     def test_request_bootstraps_session_on_html_403(
         self, mock_build_headers: Mock
     ) -> None:
-        """HTML 403 on API should trigger session bootstrap before retrying."""
+        """HTML 403 should not require a separate webpage bootstrap request."""
         mock_build_headers.return_value = {}
 
         client = HttpClient()
@@ -399,11 +403,6 @@ class TestHttpClient:
         first_response.text = "<html>Forbidden</html>"
         first_response.reason = "Forbidden"
 
-        bootstrap_response = Mock()
-        bootstrap_response.status_code = 200
-        bootstrap_response.headers = {"Content-Type": "text/html;charset=ISO-8859-1"}
-        bootstrap_response.text = "<!DOCTYPE html>"
-
         second_response = Mock()
         second_response.status_code = 200
         second_response.headers = {"Content-Type": "application/json"}
@@ -411,23 +410,23 @@ class TestHttpClient:
         second_response.text = "ok"
         second_response.reason = "OK"
 
-        with patch.object(client, "_has_athena_session_cookie", return_value=True):
-            with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
+        with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
+            with patch(
+                "athena_client.http.create_athena_js_session",
+                return_value="20261010_feedface",
+            ):
                 with patch.object(
                     client.session,
                     "request",
-                    side_effect=[first_response, bootstrap_response, second_response],
+                    side_effect=[first_response, second_response],
                 ) as mock_request:
                     result = client.request("GET", "/test")
                     assert result == {"result": "success"}
-                    assert mock_request.call_count == 3
-                    bootstrap_call_args = mock_request.call_args_list[1]
-                    assert bootstrap_call_args[0][0] == "GET"
-                    assert (
-                        bootstrap_call_args[0][1]
-                        == "https://athena.ohdsi.org/search-terms/terms"
+                    assert mock_request.call_count == 2
+                    assert all(
+                        call_args[1]["url"] == "https://athena.ohdsi.org/api/v1/test"
+                        for call_args in mock_request.call_args_list
                     )
-                    assert client._athena_session_initialized is True
 
     @patch("athena_client.http.build_headers")
     def test_request_does_not_bootstrap_for_non_athena_hosts(
@@ -437,7 +436,6 @@ class TestHttpClient:
         mock_build_headers.return_value = {}
 
         client = HttpClient(base_url="https://example.com/api/v1")
-        client._athena_session_initialized = False
         first_response = Mock()
         first_response.status_code = 403
         first_response.headers = {"Content-Type": "text/html"}
@@ -464,93 +462,50 @@ class TestHttpClient:
                     assert "/search-terms/terms" not in str(call_args[1].get("url", ""))
 
     @patch("athena_client.http.build_headers")
-    def test_request_bootstrap_200_without_session_cookie_keeps_retrying(
+    def test_request_creates_missing_js_session_cookie(
         self, mock_build_headers: Mock
     ) -> None:
-        """Bootstrap 200 without session cookie should not mark session
-        as initialized."""
+        """A missing JavaScript cookie should be created before the API call."""
         mock_build_headers.return_value = {}
 
         client = HttpClient()
-        client._athena_session_initialized = False
-        first_response = Mock()
-        first_response.status_code = 403
-        first_response.headers = {"Content-Type": "text/html"}
-        first_response.text = "<html>Forbidden</html>"
-        first_response.reason = "Forbidden"
+        client.session.cookies.clear()
+        response = Mock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "application/json"}
+        response.content = orjson.dumps({"result": "success"})
+        response.text = "ok"
+        response.reason = "OK"
 
-        bootstrap_response = Mock()
-        bootstrap_response.status_code = 200
-        bootstrap_response.headers = {"Content-Type": "text/html;charset=ISO-8859-1"}
-        bootstrap_response.text = "<!DOCTYPE html>"
-
-        second_response = Mock()
-        second_response.status_code = 200
-        second_response.headers = {"Content-Type": "application/json"}
-        second_response.content = orjson.dumps({"result": "success"})
-        second_response.text = "ok"
-        second_response.reason = "OK"
-
-        with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
+        with patch(
+            "athena_client.http.create_athena_js_session",
+            return_value="20261010_feedface",
+        ):
             with patch.object(
                 client.session,
                 "request",
-                side_effect=[first_response, bootstrap_response, second_response],
+                return_value=response,
             ) as mock_request:
                 result = client.request("GET", "/test")
                 assert result == {"result": "success"}
-                assert mock_request.call_count == 3
-                bootstrap_call = mock_request.call_args_list[1]
-                assert (
-                    bootstrap_call[0][1]
-                    == "https://athena.ohdsi.org/search-terms/terms"
-                )
-                assert client._athena_session_initialized is False
+                assert mock_request.call_count == 1
+                assert client._athena_js_session_value() == "20261010_feedface"
 
     @patch("athena_client.http.build_headers")
     def test_request_bootstraps_session_with_schemaless_base_url(
         self, mock_build_headers: Mock
     ) -> None:
-        """Base URLs without scheme should still bootstrap using Athena host."""
+        """A schemaless Athena URL should still receive the JavaScript cookie."""
         mock_build_headers.return_value = {}
 
-        client = HttpClient(base_url="athena.ohdsi.org/api/v1")
-        first_response = Mock()
-        first_response.status_code = 403
-        first_response.headers = {"Content-Type": "text/html"}
-        first_response.text = "<html>Forbidden</html>"
-        first_response.reason = "Forbidden"
-
-        bootstrap_response = Mock()
-        bootstrap_response.status_code = 200
-        bootstrap_response.headers = {"Content-Type": "text/html;charset=ISO-8859-1"}
-        bootstrap_response.text = "<!DOCTYPE html>"
-
-        second_response = Mock()
-        second_response.status_code = 200
-        second_response.headers = {"Content-Type": "application/json"}
-        second_response.content = orjson.dumps({"result": "success"})
-        second_response.text = "ok"
-        second_response.reason = "OK"
-
-        with patch.object(
-            client,
-            "_has_athena_session_cookie",
-            return_value=True,
+        with patch(
+            "athena_client.http.create_athena_js_session",
+            return_value="20261010_feedface",
         ):
-            with patch.object(client, "_USER_AGENTS", ["agent1", "agent2"]):
-                with patch.object(
-                    client.session,
-                    "request",
-                    side_effect=[first_response, bootstrap_response, second_response],
-                ) as mock_request:
-                    result = client.request("GET", "/test")
-                    assert result == {"result": "success"}
-                    bootstrap_call = mock_request.call_args_list[1]
-                    assert (
-                        bootstrap_call[0][1]
-                        == "https://athena.ohdsi.org/search-terms/terms"
-                    )
+            client = HttpClient(base_url="athena.ohdsi.org/api/v1")
+
+        assert client._is_athena_host()
+        assert client._athena_js_session_value() == "20261010_feedface"
 
     @patch("athena_client.http.build_headers")
     def test_request_retry_preserves_content_type_for_body(
@@ -560,7 +515,6 @@ class TestHttpClient:
         mock_build_headers.return_value = {}
 
         client = HttpClient()
-        client._athena_session_initialized = True
         first_response = Mock()
         first_response.status_code = 403
         first_response.headers = {"Content-Type": "text/html"}
