@@ -145,6 +145,26 @@ class TestConceptDetails:
         assert details.validStart == "2000-01-01"
         assert details.validEnd == "2099-12-31"
 
+    def test_concept_details_accepts_links_as_list(self):
+        """The API returns HATEOAS links as a list of {rel, href} objects."""
+        details = ConceptDetails.model_validate(
+            {
+                "id": 4131907,
+                "name": "Lipoatrophic diabetes",
+                "domainId": "Condition",
+                "vocabularyId": "SNOMED",
+                "conceptClassId": "Clinical Finding",
+                "standardConcept": ConceptType.STANDARD,
+                "conceptCode": "1",
+                "invalidReason": None,
+                "validStart": "2000-01-01",
+                "validEnd": "2099-12-31",
+                "links": [{"rel": "self", "href": "/concepts/4131907"}],
+            }
+        )
+
+        assert details.links == [{"rel": "self", "href": "/concepts/4131907"}]
+
     def test_concept_details_from_dict(self):
         """Test ConceptDetails model creation from dictionary."""
         data = {

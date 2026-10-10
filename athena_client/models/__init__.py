@@ -207,7 +207,7 @@ class ConceptDetails(BaseModel):
     vocabularyName: Optional[str] = Field(None, description="Vocabulary name")
     vocabularyVersion: Optional[str] = Field(None, description="Vocabulary version")
     vocabularyReference: Optional[str] = Field(None, description="Vocabulary reference")
-    links: Optional[Dict[str, Any]] = Field(
+    links: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = Field(
         None, description="HATEOAS links", alias="_links"
     )
 
