@@ -170,7 +170,10 @@ class AsyncHttpClient:
             if hostname is None:
                 return False
 
-            cookie_value = create_athena_js_session(user_agent)
+            cookie_value = create_athena_js_session(
+                user_agent,
+                previous_utc_day=force,
+            )
             self.client.cookies.set(
                 ATHENA_JS_SESSION_COOKIE_NAME,
                 cookie_value,

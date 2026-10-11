@@ -480,7 +480,10 @@ class TestAsyncHttpClient:
             )
 
         assert sorted(refresh_results) == [False, True]
-        create_cookie.assert_called_once_with("agent1")
+        create_cookie.assert_called_once_with(
+            "agent1",
+            previous_utc_day=True,
+        )
         assert client._athena_js_session_value() == "20261010_feedface"
 
     @patch("athena_client.async_client.build_headers")

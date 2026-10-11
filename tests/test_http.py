@@ -372,7 +372,7 @@ class TestHttpClient:
             with patch(
                 "athena_client.http.create_athena_js_session",
                 return_value="20261010_feedface",
-            ):
+            ) as create_cookie:
                 with patch.object(
                     client.session,
                     "request",
@@ -388,6 +388,10 @@ class TestHttpClient:
                     assert retry_headers["Sec-Fetch-Site"] == "same-origin"
                     assert "Content-Type" not in retry_headers
                     assert client._athena_js_session_value() == "20261010_feedface"
+                    create_cookie.assert_called_once_with(
+                        "agent1",
+                        previous_utc_day=True,
+                    )
 
     @patch("athena_client.http.build_headers")
     def test_request_bootstraps_session_on_html_403(

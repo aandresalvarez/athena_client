@@ -128,11 +128,19 @@ def create_athena_js_session(
     now: Optional[datetime] = None,
     nonce: Optional[str] = None,
     fingerprint: Optional[BrowserFingerprint] = None,
+    previous_utc_day: bool = False,
 ) -> str:
-    """Create an ``athena_js_session`` value using Athena's frontend algorithm."""
+    """Create an ``athena_js_session`` value using Athena's frontend algorithm.
+
+    Athena's frontend accepts cookies dated today or yesterday. The
+    ``previous_utc_day`` option supports servers whose local date temporarily
+    lags UTC after the UTC day boundary.
+    """
     effective_now = now or datetime.now(timezone.utc)
     if effective_now.tzinfo is None:
         raise ValueError("now must be timezone-aware")
+    if previous_utc_day:
+        effective_now -= timedelta(days=1)
 
     date_stamp = effective_now.astimezone(timezone.utc).strftime("%Y%m%d")
     effective_nonce = nonce if nonce is not None else _base36(secrets.randbits(53))

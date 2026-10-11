@@ -47,6 +47,16 @@ def test_cookie_matches_javascript_reference() -> None:
 
     assert cookie == "20261010_d07b6da0"
 
+    previous_day_cookie = create_athena_js_session(
+        "Test/1.0",
+        now=datetime(2026, 10, 10, 23, 0, tzinfo=timezone.utc),
+        nonce="fixednonce",
+        fingerprint=fingerprint,
+        previous_utc_day=True,
+    )
+
+    assert previous_day_cookie == "20261009_fde905c8"
+
 
 @pytest.mark.parametrize(
     ("value", "expected"),
