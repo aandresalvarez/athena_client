@@ -6,7 +6,8 @@ This module provides a CLI for interacting with the Athena API.
 
 import json
 import sys
-from typing import Any, List, Optional, cast
+from enum import Enum
+from typing import Any, Dict, List, Optional, cast
 
 from athena_client.models import Concept
 
@@ -63,6 +64,54 @@ def _create_client(
     )
 
 
+def _to_plain(obj: Any) -> Any:
+    """Recursively replace Enum members with their values (YAML-safe)."""
+    if isinstance(obj, Enum):
+        return obj.value
+    if isinstance(obj, (list, tuple)):
+        return [_to_plain(item) for item in obj]
+    if isinstance(obj, dict):
+        return {k: _to_plain(v) for k, v in obj.items()}
+    return obj
+
+
+def _filter_relationships(
+    data: Dict[str, Any], relationship_id: Optional[str]
+) -> Dict[str, Any]:
+    """Keep only relationships whose relationshipId matches (case-insensitive)."""
+    if not relationship_id:
+        return data
+    wanted = relationship_id.lower()
+    groups = []
+    for group in data.get("items", []):
+        matching = [
+            rel
+            for rel in group.get("relationships", [])
+            if str(rel.get("relationshipId", "")).lower() == wanted
+        ]
+        if matching:
+            groups.append({**group, "relationships": matching})
+    return {
+        "count": sum(len(group["relationships"]) for group in groups),
+        "items": groups,
+    }
+
+
+def _relationship_rows(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Flatten grouped relationships into one row per related concept."""
+    return [
+        {
+            "relationshipId": rel.get("relationshipId"),
+            "relationshipName": group.get("relationshipName"),
+            "targetConceptId": rel.get("targetConceptId"),
+            "targetConceptName": rel.get("targetConceptName"),
+            "targetVocabularyId": rel.get("targetVocabularyId"),
+        }
+        for group in data.get("items", [])
+        for rel in group.get("relationships", [])
+    ]
+
+
 def _format_output(data: object, output: str, console: Any = None) -> None:
     """
     Format and print data based on the requested output format.
@@ -96,7 +145,7 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
         try:
             import yaml
 
-            print(yaml.dump(to_serializable(data)))
+            print(yaml.safe_dump(_to_plain(to_serializable(data)), allow_unicode=True))
         except (ImportError, ModuleNotFoundError):
             print(
                 "The 'pyyaml' package is required for YAML output. "
@@ -151,6 +200,8 @@ def _format_output(data: object, output: str, console: Any = None) -> None:
             results = cast(Any, data).to_list()
         elif isinstance(data, list) and data and hasattr(data[0], "model_dump"):
             results = [cast(Any, item).model_dump() for item in data]
+        elif isinstance(data, list):
+            results = data
         elif isinstance(data, dict):
             results = [data]
         elif hasattr(data, "model_dump"):
@@ -321,7 +372,7 @@ if CLICK_AVAILABLE:
         results = client.search(
             query,
             fuzzy=fuzzy,
-            page_size=effective_page_size,
+            size=effective_page_size,
             page=page,
             domain=domain,
             vocabulary=vocabulary,
@@ -453,6 +504,13 @@ if CLICK_AVAILABLE:
         only_standard: bool,
     ) -> None:
         """Get relationships for a specific concept."""
+        if only_standard:
+            click.echo(
+                "Warning: --only-standard is not supported (the API response does "
+                "not say which related concepts are standard); showing all.",
+                err=True,
+            )
+
         client = _create_client(
             ctx.obj["base_url"],
             ctx.obj["token"],
@@ -461,7 +519,19 @@ if CLICK_AVAILABLE:
         )
 
         result = client.relationships(concept_id)
-        _format_output(result, ctx.obj["output"], ctx.obj.get("console"))
+        output_format = ctx.obj["output"]
+        data = result.model_dump() if hasattr(result, "model_dump") else result
+        if isinstance(data, dict):
+            data = _filter_relationships(data, relationship_id)
+            # Grouped data renders poorly as a table or CSV: one row per relation.
+            if output_format in ("table", "csv"):
+                _format_output(
+                    _relationship_rows(data), output_format, ctx.obj.get("console")
+                )
+            else:
+                _format_output(data, output_format, ctx.obj.get("console"))
+            return
+        _format_output(result, output_format, ctx.obj.get("console"))
 
     @cli.command()  # type: ignore[misc]
     @click.argument("concept_id", type=int)

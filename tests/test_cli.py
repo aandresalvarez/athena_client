@@ -3,9 +3,11 @@
 import json
 from unittest.mock import Mock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from athena_client.cli import _create_client, _format_output, cli
+from athena_client.models import ConceptRelationship, ConceptType
 
 
 class TestCLI:
@@ -74,7 +76,7 @@ class TestCLI:
         """Test YAML output formatting."""
         data = {"key": "value", "number": 123}
         mock_yaml = Mock()
-        mock_yaml.dump.return_value = "key: value\nnumber: 123\n"
+        mock_yaml.safe_dump.return_value = "key: value\nnumber: 123\n"
         with patch.dict("sys.modules", {"yaml": mock_yaml}):
             with patch("builtins.print") as mock_print:
                 _format_output(data, "yaml")
@@ -251,6 +253,12 @@ class TestCLI:
         assert result.exit_code == 0
         mock_create_client.assert_called_once()
         mock_client.search.assert_called_once()
+
+        # --limit must shrink the request itself, not just trim the output.
+        # AthenaClient.search takes ``size``; ``page_size`` would be ignored.
+        _, search_kwargs = mock_client.search.call_args
+        assert search_kwargs["size"] == 3
+        assert "page_size" not in search_kwargs
 
         # Verify that top() was called with the correct limit
         mock_search_result.top.assert_called_once_with(3)
@@ -510,3 +518,131 @@ class TestCLI:
 
             assert result.exit_code == 1
             assert "The 'pyyaml' package is required for YAML output" in result.output
+
+
+def _sample_relationships() -> ConceptRelationship:
+    return ConceptRelationship.model_validate(
+        {
+            "count": 3,
+            "items": [
+                {
+                    "relationshipName": "Is a",
+                    "relationships": [
+                        {
+                            "targetConceptId": 134324,
+                            "targetConceptName": "Lipodystrophy",
+                            "targetVocabularyId": "SNOMED",
+                            "relationshipId": "Is a",
+                            "relationshipName": "Is a",
+                        }
+                    ],
+                },
+                {
+                    "relationshipName": "Standard to Non-standard map (OMOP)",
+                    "relationships": [
+                        {
+                            "targetConceptId": 45909192,
+                            "targetConceptName": "Lipoatrophic diabetes",
+                            "targetVocabularyId": "CIEL",
+                            "relationshipId": "Mapped from",
+                            "relationshipName": "Standard to Non-standard map (OMOP)",
+                        },
+                        {
+                            "targetConceptId": 45523159,
+                            "targetConceptName": "Lipoatrophic diabetes mellitus",
+                            "targetVocabularyId": "Read",
+                            "relationshipId": "Mapped from",
+                            "relationshipName": "Standard to Non-standard map (OMOP)",
+                        },
+                    ],
+                },
+            ],
+        }
+    )
+
+
+class TestCLIOutputFixes:
+    """Regression tests for YAML output and the relationships command."""
+
+    def test_yaml_output_is_safe_and_portable(self, capsys):
+        yaml = pytest.importorskip("yaml")
+        _format_output(
+            {"standardConcept": ConceptType.STANDARD, "name": "diabetes lipoatrófica"},
+            "yaml",
+        )
+        out = capsys.readouterr().out
+
+        assert "!!python" not in out
+        assert "lipoatrófica" in out
+        assert yaml.safe_load(out) == {
+            "standardConcept": "Standard",
+            "name": "diabetes lipoatrófica",
+        }
+
+    def test_table_output_renders_list_of_dicts(self):
+        console = Mock()
+        _format_output([{"a": 1, "b": 2}, {"a": 3, "b": 4}], "table", console)
+
+        table = console.print.call_args[0][0]
+        assert [col.header for col in table.columns] == ["a", "b"]
+        assert table.row_count == 2
+
+    @patch("athena_client.cli._create_client")
+    @patch("athena_client.cli._format_output")
+    def test_relationships_table_is_flattened(self, mock_format, mock_create):
+        mock_create.return_value.relationships.return_value = _sample_relationships()
+
+        result = CliRunner().invoke(cli, ["-o", "table", "relationships", "1"])
+
+        assert result.exit_code == 0
+        rows, fmt = mock_format.call_args[0][:2]
+        assert fmt == "table"
+        assert len(rows) == 3
+        assert rows[0] == {
+            "relationshipId": "Is a",
+            "relationshipName": "Is a",
+            "targetConceptId": 134324,
+            "targetConceptName": "Lipodystrophy",
+            "targetVocabularyId": "SNOMED",
+        }
+
+    @patch("athena_client.cli._create_client")
+    @patch("athena_client.cli._format_output")
+    def test_relationships_json_keeps_full_structure(self, mock_format, mock_create):
+        mock_create.return_value.relationships.return_value = _sample_relationships()
+
+        result = CliRunner().invoke(cli, ["-o", "json", "relationships", "1"])
+
+        assert result.exit_code == 0
+        data = mock_format.call_args[0][0]
+        assert data["count"] == 3
+        assert len(data["items"]) == 2
+
+    @patch("athena_client.cli._create_client")
+    @patch("athena_client.cli._format_output")
+    def test_relationships_filter_by_relationship_id(self, mock_format, mock_create):
+        mock_create.return_value.relationships.return_value = _sample_relationships()
+
+        result = CliRunner().invoke(
+            cli,
+            ["-o", "json", "relationships", "1", "--relationship-id", "mapped FROM"],
+        )
+
+        assert result.exit_code == 0
+        data = mock_format.call_args[0][0]
+        assert data["count"] == 2
+        assert [g["relationshipName"] for g in data["items"]] == [
+            "Standard to Non-standard map (OMOP)"
+        ]
+
+    @patch("athena_client.cli._create_client")
+    @patch("athena_client.cli._format_output")
+    def test_relationships_only_standard_warns_that_it_is_ignored(
+        self, mock_format, mock_create
+    ):
+        mock_create.return_value.relationships.return_value = _sample_relationships()
+
+        result = CliRunner().invoke(cli, ["relationships", "1", "--only-standard"])
+
+        assert result.exit_code == 0
+        assert "--only-standard is not supported" in result.output
