@@ -5,6 +5,7 @@ This module provides progress indicators and user-friendly feedback
 for long-running operations like large searches and graph queries.
 """
 
+import sys
 import threading
 import time
 from contextlib import contextmanager
@@ -45,7 +46,7 @@ class ProgressTracker:
         if self.show_progress:
             progress_str = self._get_progress_string()
             if progress_str:
-                print(progress_str, end="", flush=True)
+                print(progress_str, end="", flush=True, file=sys.stderr)
 
     def update(self, increment: int = 1) -> None:
         """
@@ -68,7 +69,7 @@ class ProgressTracker:
                 self.last_update_time = current_time
 
         if progress_str:
-            print(progress_str, end="", flush=True)
+            print(progress_str, end="", flush=True, file=sys.stderr)
 
     def complete(self) -> None:
         """Mark the operation as complete."""
@@ -79,8 +80,8 @@ class ProgressTracker:
                 progress_str = self._get_progress_string()
 
         if progress_str:
-            print(progress_str, end="", flush=True)
-            print(f"\n✅ {self.description} completed!")
+            print(progress_str, end="", flush=True, file=sys.stderr)
+            print(f"\n✅ {self.description} completed!", file=sys.stderr)
 
     def _get_progress_string(self) -> Optional[str]:
         """Calculate the current progress string."""

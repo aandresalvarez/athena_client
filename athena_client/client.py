@@ -5,6 +5,7 @@ This module provides the main client class for interacting with the Athena API.
 """
 
 import logging
+import sys
 import time
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
@@ -151,7 +152,7 @@ class AthenaClient:
         estimated_size = estimate_query_size(query_str)
         warning = format_large_query_warning(query_str, estimated_size, size)
         if warning:
-            print(warning)
+            print(warning, file=sys.stderr, flush=True)
 
         # Use settings default page size if not specified
         if size == 20 and "pageSize" not in kwargs:
@@ -528,10 +529,15 @@ class AthenaClient:
 
         # Provide warning for complex graphs
         if depth > 3 or zoom_level > 3:
-            print(f"⚠️  Complex graph request: depth={depth}, zoom_level={zoom_level}")
+            print(
+                f"⚠️  Complex graph request: depth={depth}, zoom_level={zoom_level}",
+                file=sys.stderr,
+            )
             print(
                 "💡 This may take several minutes to complete. "
-                "Consider reducing depth or zoom level."
+                "Consider reducing depth or zoom level.",
+                file=sys.stderr,
+                flush=True,
             )
 
         params = {

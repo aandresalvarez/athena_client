@@ -646,3 +646,47 @@ class TestCLIOutputFixes:
 
         assert result.exit_code == 0
         assert "--only-standard is not supported" in result.output
+
+
+def _runner_with_separate_stderr() -> CliRunner:
+    # click < 8.2 mixes stderr into stdout unless told not to; 8.2+ always separates.
+    try:
+        return CliRunner(mix_stderr=False)  # type: ignore[call-arg]
+    except TypeError:
+        return CliRunner()
+
+
+def test_search_json_stdout_is_parseable_when_warning_is_shown():
+    """Notes and progress must go to stderr so ``-o json`` stays valid JSON."""
+    page = {
+        "content": [
+            {
+                "id": 201826,
+                "name": "Type 2 diabetes mellitus",
+                "domain": "Condition",
+                "vocabulary": "SNOMED",
+                "className": "Disorder",
+                "standardConcept": "Standard",
+                "code": "44054006",
+                "invalidReason": "Valid",
+                "score": None,
+            }
+        ],
+        "pageable": {"pageNumber": 0, "pageSize": 2},
+        "totalElements": 5000,
+        "last": False,
+        "first": True,
+        "size": 2,
+        "number": 0,
+    }
+    with (
+        patch("athena_client.http.HttpClient.get", return_value=page),
+        patch("athena_client.http.HttpClient._throttle_request"),
+    ):
+        result = _runner_with_separate_stderr().invoke(
+            cli, ["-o", "json", "search", "diabetes", "--limit", "2"]
+        )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)[0]["id"] == 201826
+    assert "Note: Query 'diabetes'" in result.stderr

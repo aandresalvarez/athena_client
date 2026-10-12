@@ -5,6 +5,7 @@ These tests verify that the enhanced search features work correctly,
 including progress tracking for large queries.
 """
 
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -84,7 +85,9 @@ class TestEnhancedSearch:
                         "athena_client.http.HttpClient._throttle_request"
                     ):  # Disable throttling
                         athena.search("pain", size=100)
-                        mock_print.assert_any_call(warning_text)
+                        mock_print.assert_any_call(
+                            warning_text, file=sys.stderr, flush=True
+                        )
 
     def test_page_size_validation(self):
         """Test that page size validation works correctly."""
